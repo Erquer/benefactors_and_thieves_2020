@@ -51,6 +51,11 @@ std::vector<Flowerpot> potStatus;
 std::vector<Toilet> toilStatus;
 
 /*
+ * Mutexes
+ */
+pthread_mutex_t clock_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/*
  * message structure: Lamport + PID + index of requested item + changeStamp of requested item
  * message type to requests: tag_flowerpots - to request flowerpot; tag_toilet - to request toilet.
  */

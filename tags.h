@@ -2,7 +2,12 @@
 // Created by blazej on 12.06.2020.
 //
 
-#ifndef BENEFACTORS_AND_THIEVES_2020_TAGS_H
-#define BENEFACTORS_AND_THIEVES_2020_TAGS_H
+#ifndef TAG_REPAIR
+//Tag for enter critical section to repair item
+#define TAG_REPAIR 110
+#endif
 
-#endif //BENEFACTORS_AND_THIEVES_2020_TAGS_H
+#ifndef TAG_BREAK
+//Tag for enter critical section to break item
+#define TAG_BREAK 120
+#endif

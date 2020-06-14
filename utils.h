@@ -22,13 +22,19 @@
         int pid;
 
         /*
+         * changeStamp of requested item
+         */
+        int changeStamp;
+
+        /*
          * Constuctor
          * @param time - Lamport's clock
          * @param id - process ID
          */
-        Request(int time, int id) {
+        Request(int time, int id, int change) {
             this->time = time;
             this->pid = id;
+            this->changeStamp = change;
         }
 
 
