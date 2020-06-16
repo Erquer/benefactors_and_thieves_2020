@@ -6,6 +6,7 @@
 
 #include "utils.h"
 #include "communication.h"
+#include "benefactor.h"
 
 //Globals
 int lamport_clock = 0;
