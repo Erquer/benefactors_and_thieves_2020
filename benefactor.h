@@ -5,7 +5,10 @@
 class Benefactor {
 public:
     //constructor
-    Benefactor();
+    //save info about flowerpots and toilets
+    //in Benefactor attributes
+    Benefactor(std::vector <Flowerpot> flowerpots, 
+                std::vector <Toilet> toilets);
 private:
     //0 -> benefactor not requesting resources
     //1 -> benefactor requesting a resource
@@ -25,14 +28,12 @@ private:
 
     /////////////////////////////////////////////////////////
 
-    //randomly choose flowerpot/toilet
+    //choose to fix flowerpot or toilet
     //0 -> flowerpot
     //1 -> toilet
     bool flowerpotOrToilet();
 
     //find an item to fix 
-    //choice == 0 -> flowerpot
-    //choice == 1 -> toilet
     //return item index from flowerpots/toilets vector
-    int findItemToFix(bool choice);
+    int findItemToFix();
 };

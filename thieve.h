@@ -5,7 +5,8 @@
 class Thieve {
 public:
     //constructor
-    Thieve();
+    Thieve(std::vector <Flowerpot> flowerpots,
+            std::vector <Toilet> toilets);
 private:
     //0 -> thieve not requesting resources
     //1 -> thieve requesting a resource
@@ -34,5 +35,5 @@ private:
     //choice == 0 -> flowerpot
     //choice == 1 -> toilet
     //return item index from flowerpots/toilets vector
-    int findItemToDestroy(bool choice);
+    int findItemToDestroy();
 };

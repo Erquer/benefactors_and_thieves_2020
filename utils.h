@@ -20,6 +20,10 @@
          * Sender PID
          */
         int pid;
+        /*
+         * Sender resource id
+         */
+        int rid;
 
         /*
          * changeStamp of requested item
@@ -31,9 +35,10 @@
          * @param time - Lamport's clock
          * @param id - process ID
          */
-        Request(int time, int id, int change) {
+        Request(int time, int pid, int rid, int change) {
             this->time = time;
-            this->pid = id;
+            this->pid = pid;
+            this->rid = rid;
             this->changeStamp = change;
         }
 

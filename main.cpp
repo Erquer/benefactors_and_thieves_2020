@@ -1,5 +1,5 @@
 #include <iostream>
-#include "mpi/mpi.h"
+#include "mpi.h"
 #include <vector>
 #include <stdlib.h>
 #include <stdio.h>
