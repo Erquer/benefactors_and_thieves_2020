@@ -4,7 +4,8 @@
 
 #include "communication.h"
 
-extern pthread_mutex_t  clock_mutex;
+extern pthread_mutex_t clock_mutex;
+
 void send(int &clock, int message, int changeStamp, int tag, int reciever, int sender) {
     pthread_mutex_lock(&clock_mutex);
 

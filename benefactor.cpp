@@ -149,4 +149,5 @@ int Benefactor::findItemToFix() {
         //return the one with the smallest changeStamp
         return smallestChangeStampID;
     } //else if
+    return 0;
 } //int Benefactor::findItemToFix()
