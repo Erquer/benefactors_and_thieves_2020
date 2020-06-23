@@ -1,5 +1,5 @@
 #include <iostream>
-#include "mpi.h"
+#include "mpi/mpi.h"
 #include <vector>
 #include <stdlib.h>
 #include <stdio.h>
@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "communication.h"
 #include "benefactor.h"
+#include "thieve.h"
 
 //Globals
 int lamport_clock = 0;
@@ -32,6 +33,11 @@ bool run_program = true;
 
 //debug mode - show additional messages while working
 bool debugMode = true;
+
+//benefactor - if process is benefactor then we initialize this variable to control requests
+Benefactor* benefactor;
+//thieve - if process is thieve then we initialise this variable to control requests.
+Thieve* thieve;
 
 //wysłanie requesta = request + indeks + changeStamp.
 
@@ -143,9 +149,21 @@ int main(int argc, char  *argv[]) {
     //initialize vectors with flowerpots and toilets
     initData(argc, argv);
 
+    if(myPID % 2 == 0){
+        //thieve
+        thieve = new Thieve(potStatus, toilStatus);
+    }else{
+        //benefactor
+        benefactor = new Benefactor(potStatus,toilStatus, myPID);
+    }
     //seed for random based on our PID
     srand(myPID);
 
+    while (run_program)
+    {
+       benefactor->runYourStuff();
+    }
+    
     std::cout << "Hello, World!" << std::endl;
 
     printf("Waiting for others to complete working\n");

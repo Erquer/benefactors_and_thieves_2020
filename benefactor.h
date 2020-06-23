@@ -1,5 +1,7 @@
 #include <vector>
-
+#include <tuple>
+#include <stdio.h>
+#include <iostream>
 #include "utils.h"
 
 class Benefactor {
@@ -7,13 +9,15 @@ public:
     //constructor
     //save info about flowerpots and toilets
     //in Benefactor attributes
-    Benefactor(std::vector <Flowerpot> flowerpots, 
-                std::vector <Toilet> toilets);
+    Benefactor(std::vector <Flowerpot*> flowerpots, 
+                std::vector <Toilet*> toilets, int PID);
+    void runYourStuff();
 private:
     //0 -> benefactor not requesting resources
     //1 -> benefactor requesting a resource
     bool status;
 
+    int myPID;
     //lamport clock
     int time;
 
@@ -22,9 +26,9 @@ private:
     //vector of all toilet requests
     std::vector <Request> toiletRequests;
     //vector of all flowerpots 
-    std::vector <Flowerpot> flowerpots;
+    std::vector <Flowerpot*> flowerpots;
     //vector of all toilets
-    std::vector <Toilet> toilets;
+    std::vector <Toilet*> toilets;
 
     /////////////////////////////////////////////////////////
 
@@ -35,5 +39,7 @@ private:
 
     //find an item to fix 
     //return item index from flowerpots/toilets vector
-    int findItemToFix();
+    std::pair<int,int> findItemToFix();
+
+    
 };

@@ -8,8 +8,8 @@
 //constructor
 //save info about flowerpots and toilets
 //in Thieve attributes
-Thieve::Thieve(std::vector <Flowerpot> flowerpots, 
-                std::vector <Toilet> toilets) {
+Thieve::Thieve(std::vector <Flowerpot*> flowerpots, 
+                std::vector <Toilet*> toilets) {
     //set status and lamport clock to 0
     status = 0;
     time = 0;
@@ -26,8 +26,8 @@ bool Thieve::flowerpotOrToilet() {
     int fixedFlowerpotsCount = 0;
     //count
     //for each flowerpot in flowerpots
-    for (Flowerpot flowerpot : this->flowerpots){
-        if (flowerpot.status == REPAIRED){
+    for (Flowerpot* flowerpot : this->flowerpots){
+        if (flowerpot->status == REPAIRED){
             fixedFlowerpotsCount++;
         }
     }
@@ -36,8 +36,8 @@ bool Thieve::flowerpotOrToilet() {
     int fixedToiletsCount = 0;
     //count
     //for each toilet in toilets
-    for (Toilet toilet : this->toilets){
-        if (toilet.status == REPAIRED){
+    for (Toilet* toilet : this->toilets){
+        if (toilet->status == REPAIRED){
             fixedToiletsCount++;
         }
     }
@@ -47,8 +47,9 @@ bool Thieve::flowerpotOrToilet() {
     int toiletRequestsCount = this->toiletRequests.size();
 
     //calculate requests to resources ratio
-    double flowerpotsRatio = flowerpotRequestsCount / fixedFlowerpotsCount;
-    double toiletsRatio = toiletRequestsCount / fixedToiletsCount;
+
+    double flowerpotsRatio = (fixedFlowerpotsCount==0) ? 0 : flowerpotRequestsCount / fixedFlowerpotsCount;
+    double toiletsRatio = (fixedToiletsCount == 0)  ? 0 : toiletRequestsCount / fixedToiletsCount;
 
     //choose smaller ratio
     bool choice;
@@ -74,14 +75,14 @@ int Thieve::findItemToDestroy() {
     if (choice == FLOWERPOT){
         //hold smallest flowerpot changeStamp
         //set this to the first flowerpot changeStamp value
-        Flowerpot firstFlowerpot = this->flowerpots[0];
-        int smallestChangeStampValue = firstFlowerpot.changeStamp;
+        Flowerpot* firstFlowerpot = this->flowerpots[0];
+        int smallestChangeStampValue = firstFlowerpot->changeStamp;
         int smallestChangeStampID = 0;
 
         //for each flowerpot in flowerpots
         for(int flowerpotID = 0; flowerpotID < this->flowerpots.size(); flowerpotID++){
             //current flowerpot
-            Flowerpot flowerpot = this->flowerpots[flowerpotID];
+            Flowerpot* flowerpot = this->flowerpots[flowerpotID];
 
             //check if this flowerpot has no requests
             bool noRequests = true;
@@ -99,8 +100,8 @@ int Thieve::findItemToDestroy() {
                 return flowerpotID;
             }
             //else keep looking for the smallest flowerpot changeStamp
-            else if(flowerpot.changeStamp < smallestChangeStampValue) {
-                smallestChangeStampValue = flowerpot.changeStamp;
+            else if(flowerpot->changeStamp < smallestChangeStampValue) {
+                smallestChangeStampValue = flowerpot->changeStamp;
                 smallestChangeStampID = flowerpotID;
             }
         } //for
@@ -114,14 +115,14 @@ int Thieve::findItemToDestroy() {
     else if (choice == TOILET){
         //hold smallest toilet changeStamp
         //set this to the first toilet changeStamp value
-        Toilet firstToilet = this->toilets[0];
-        int smallestChangeStampValue = firstToilet.changeStamp;
+        Toilet* firstToilet = this->toilets[0];
+        int smallestChangeStampValue = firstToilet->changeStamp;
         int smallestChangeStampID = 0;
 
         //for each toilet in toilets
         for(int toiletID = 0; toiletID < this->toilets.size(); toiletID++){
             //current toilet
-            Toilet toilet = this->toilets[toiletID];
+            Toilet* toilet = this->toilets[toiletID];
 
             //check if this toilet has no requests
             bool noRequests = true;
@@ -139,8 +140,8 @@ int Thieve::findItemToDestroy() {
                 return toiletID;
             }
             //else keep looking for the smallest toilet changeStamp
-            else if(toilet.changeStamp < smallestChangeStampValue) {
-                smallestChangeStampValue = toilet.changeStamp;
+            else if(toilet->changeStamp < smallestChangeStampValue) {
+                smallestChangeStampValue = toilet->changeStamp;
                 smallestChangeStampID = toiletID;
             }
         } //for

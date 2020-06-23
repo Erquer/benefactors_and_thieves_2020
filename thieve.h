@@ -5,8 +5,8 @@
 class Thieve {
 public:
     //constructor
-    Thieve(std::vector <Flowerpot> flowerpots,
-            std::vector <Toilet> toilets);
+    Thieve(std::vector <Flowerpot*> flowerpots,
+            std::vector <Toilet*> toilets);
 private:
     //0 -> thieve not requesting resources
     //1 -> thieve requesting a resource
@@ -20,9 +20,9 @@ private:
     //vector of all toilet requests
     std::vector <Request> toiletRequests;
     //vector of all flowerpots 
-    std::vector <Flowerpot> flowerpots;
+    std::vector <Flowerpot*> flowerpots;
     //vector of all toilets
-    std::vector <Toilet> toilets;
+    std::vector <Toilet*> toilets;
 
     /////////////////////////////////////////////////////////
 
