@@ -11,3 +11,13 @@
 //Tag for enter critical section to break item
 #define TAG_BREAK 120
 #endif
+
+#ifndef TAG_REQ
+//Tag for requesting access to resource
+#define TAG_REQ 130
+#endif
+
+#ifndef TAG_ACK
+//Tag for access permit
+#define TAG_ACK 140
+#endif
