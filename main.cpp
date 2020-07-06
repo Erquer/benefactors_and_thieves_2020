@@ -185,10 +185,10 @@ void checkThread(int *argc, char **argv[])
 //////////// PROCESS FUNCTIONS /////////////
 ////////////////////////////////////////////
 
-//choose to fix flowerpot or toilet
+//choose to change flowerpot or toilet
 //0 -> flowerpot
 //1 -> toilet
-std::pair<int, bool> flowerpotOrToilet()
+std::pair<int, bool> flowerpotOrToilet(bool toRepair)
 {
     //create broken flowerpots counter
     int brokenFlowerpotsCount = 0;
@@ -196,7 +196,7 @@ std::pair<int, bool> flowerpotOrToilet()
     //for each flowerpot in potStatus
     for (auto flowerpot : potStatus)
     {
-        if (flowerpot->status == REPAIRED)
+        if (flowerpot->status == toRepair)
         {
             brokenFlowerpotsCount++;
         }
@@ -208,7 +208,7 @@ std::pair<int, bool> flowerpotOrToilet()
     //for each toilet in toilStatus
     for (auto toilet : toilStatus)
     {
-        if (toilet->status == REPAIRED)
+        if (toilet->status == toRepair)
         {
             brokenToiletsCount++;
         }
@@ -240,12 +240,12 @@ std::pair<int, bool> flowerpotOrToilet()
 
 //find an item to fix
 //return item index from flowerpots/toilets vector
-std::pair<int, int> findItemToFix()
+std::pair<int, int> findItemToChange(bool toRepair)
 {
     //choose to fix flowerpot or toilet
     //0 -> flowerpot
     //1 -> toilet
-    std::pair<int, bool> choice = flowerpotOrToilet();
+    std::pair<int, bool> choice = flowerpotOrToilet(toRepair);
 
     //sign that there is no broken toilets and flowerpots so we have to wait some time for thieves to break something
     if (choice.first == 0)
@@ -365,7 +365,7 @@ void sendRequest(std::pair<int, int> item)
         potsRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, flowerpotID, TAG_REQ, totalProcesses, myPID);
+        broadcast(processLamport, item.first, flowerpotID, TAG_POT_TO_REPAIR, totalProcesses, myPID);
     }
     //toilet choosen
     else if (item.first == TOILET)
@@ -380,7 +380,7 @@ void sendRequest(std::pair<int, int> item)
         toilRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, toiletID, TAG_REQ, totalProcesses, myPID);
+        broadcast(processLamport, item.first, toiletID, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
     }
 }
 
@@ -397,7 +397,7 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
     //wait for access
     while (gottenACK <= totalProcesses - 1 && stillWaiting)
     {
-        continue;
+        break;
     }
 
     //no access
@@ -422,7 +422,7 @@ void runBenefactorLoop()
 
     while (run_program)
     {
-        std::pair<int, int> choice = findItemToFix();
+        std::pair<int, int> choice = findItemToChange(true);
         printf("[Benefactor %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
 
         //function which send request to others
@@ -438,18 +438,21 @@ void runBenefactorLoop()
         if (canIEnter)
         {
             //enter critical section increment your clock, update item status and send proper message to others.
+            //increment your clock.
             fixItem();
             sleep(5);
         }
         else
         {
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
+            //you didnt enter critical section, you dont increment your clock.
             sleep(5);
         }
+        printf("[Benefactor %d] Starting new loop \n", myPID);
     }
 }
 
-void breakItem()
+void breakItem(std::pair<int, int> choice)
 {
     printf("[Thieve %d] is going to break %d, with ID: %d \n", myPID, choice.first, choice.second);
 }
@@ -459,7 +462,7 @@ void runThieveLoop()
     while (run_program)
     {
         //should be findItemToBreak();
-        std::pair<int, int> choice = findItemToFix();
+        std::pair<int, int> choice = findItemToChange(false);
         printf("[Thieve %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
         sleep(4);
 

@@ -31,12 +31,3 @@
 //Tag using to send new request for flowerpot to repair
 #define TAG_POT_TO_REPAIR 160
 #endif
-#ifndef TAG_REQ
-//Tag for requesting access to resource
-#define TAG_REQ 130
-#endif
-
-#ifndef TAG_ACK
-//Tag for access permit
-#define TAG_ACK 140
-#endif
