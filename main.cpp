@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "utils.h"
+#include "tags.h"
 #include "communication.h"
 
 #define NOTREQUESTING 0
@@ -89,7 +90,20 @@ void *benefactorReciever(void *thread)
     while (run_program)
     {
         MPI_Status status;
-        int data[5]; //for message -> sender id, id of item to fix,
+        int data[4]; //for message -> clock,senderID,  id of item to fix, changeStamp fixed item.
+
+        recieve(lamport_clock, data, status, MPI_ANY_TAG, myPID, MPI_ANY_SOURCE);
+        int senderID = status.MPI_SOURCE;
+        switch (status.MPI_TAG)
+        {
+        case TAG_POT_TO_REPAIR:
+
+            printf("[Benefactor %d] got request for flowerpot with id %d to repair\n", myPID, data[1]);
+            break;
+
+        default:
+            break;
+        }
     }
 }
 /*
@@ -348,13 +362,16 @@ void runBenefactorLoop()
 }
 void sendRequest()
 {
+    std::cout << "Sending Request from PID: " << myPID << std::endl;
 }
 bool waitForACK()
 {
+    std::cout << "Waiting for ACK from other, my PID: " << myPID << std::endl;
     return true;
 }
-void breakItem()
+void breakItem(std::pair<int, int> choice)
 {
+    printf("[Thieve %d] is going to break %d, with ID: %d \n", myPID, choice.first, choice.second);
 }
 void runThieveLoop()
 {
@@ -374,11 +391,12 @@ void runThieveLoop()
         if (canIEnter)
         {
             //enter critical section increment your clock, update item status and send proper message to others.
-            breakItem();
+            breakItem(choice);
         }
         else
         {
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
+            printf("[Thieve %d] Couldn't enter critical section", myPID);
             sleep(5);
         }
     }
