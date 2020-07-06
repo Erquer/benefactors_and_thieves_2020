@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include "tags.h"
 #include "utils.h"
 #include "tags.h"
 #include "communication.h"
@@ -348,28 +349,107 @@ std::pair<int, int> findItemToFix()
     return std::make_pair(-1, -1);
 } //int Benefactor::findItemToFix()
 
+//function which send request to others
+void sendRequest(std::pair<int, int> item)
+{
+    //flowerpot choosen
+    if (item.first == FLOWERPOT)
+    {
+        //find flowerpot by id
+        int flowerpotID = item.second;
+        Flowerpot *flowerpot = potStatus[flowerpotID];
+
+        //create request
+        Request request(processLamport, myPID, flowerpotID, flowerpot->changeStamp);
+        //store request in global memory
+        potsRequests.push_back(request);
+
+        //send req broadcast to other
+        broadcast(processLamport, item.first, flowerpotID, TAG_REQ, totalProcesses, myPID);
+    }
+    //toilet choosen
+    else if (item.first == TOILET)
+    {
+        //find toilet by id
+        int toiletID = item.second;
+        Toilet *toilet = toilStatus[toiletID];
+
+        //create request
+        Request request(processLamport, myPID, toiletID, toilet->changeStamp);
+        //store request in global memory
+        toilRequests.push_back(request);
+
+        //send req broadcast to other
+        broadcast(processLamport, item.first, toiletID, TAG_REQ, totalProcesses, myPID);
+    }
+}
+
+//wait untill you wont get all ACK needed
+//(? check this in recieverLoop and increment variable ?) -
+//return bool if we can or dont.
+bool waitForACK(int &gottenACK, bool &stillWaiting)
+{
+    if (debugMode)
+    {
+        printf("[Process %d] Waiting for D - 1 ACK\n", myPID);
+    }
+
+    //wait for access
+    while (gottenACK <= totalProcesses - 1 && stillWaiting)
+    {
+        continue;
+    }
+
+    //no access
+    if (stillWaiting == false)
+    {
+        return false;
+    }
+    //access
+    else if (stillWaiting == true)
+    {
+        return true;
+    }
+}
+
+void fixItem()
+{
+    std::cout << "Sending Request from PID: " << myPID << std::endl;
+}
+
 void runBenefactorLoop()
 {
 
     while (run_program)
     {
         std::pair<int, int> choice = findItemToFix();
-
         printf("[Benefactor %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
 
-        sleep(4);
+        //function which send request to others
+        sendRequest(choice);
+
+        //ACK counter
+        int gottenACK = 0;
+        //set this to false when we won't get access to resource
+        bool stillWaiting = true;
+        //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
+        bool canIEnter = waitForACK(gottenACK, stillWaiting);
+
+        if (canIEnter)
+        {
+            //enter critical section increment your clock, update item status and send proper message to others.
+            fixItem();
+            sleep(5);
+        }
+        else
+        {
+            //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
+            sleep(5);
+        }
     }
 }
-void sendRequest()
-{
-    std::cout << "Sending Request from PID: " << myPID << std::endl;
-}
-bool waitForACK()
-{
-    std::cout << "Waiting for ACK from other, my PID: " << myPID << std::endl;
-    return true;
-}
-void breakItem(std::pair<int, int> choice)
+
+void breakItem()
 {
     printf("[Thieve %d] is going to break %d, with ID: %d \n", myPID, choice.first, choice.second);
 }
@@ -384,9 +464,14 @@ void runThieveLoop()
         sleep(4);
 
         //function which send request to others (add parameters)
-        sendRequest();
+        sendRequest(choice);
+
+        //ACK counter
+        int gottenACK = 0;
+        //set this to false when we won't get access to resource
+        bool stillWaiting = true;
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
-        bool canIEnter = waitForACK();
+        bool canIEnter = waitForACK(gottenACK, stillWaiting);
 
         if (canIEnter)
         {

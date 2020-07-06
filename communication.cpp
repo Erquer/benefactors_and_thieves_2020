@@ -44,4 +44,9 @@ void recieve(int &clock, int data[], MPI_Status &status, int tag, int reviever, 
 
 void broadcast(int &clock, int message, int extra_message, int tag, int world_size, int sender)
 {
+    if (debugMode)
+    {
+        printf("[Process %d][TAG: %d] Send broadcast with %d and %d\n",
+               sender, tag, message, extra_message);
+    }
 }
