@@ -227,13 +227,11 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
     if (flowerpotsRatio < toiletsRatio)
     {
         choice = FLOWERPOT;
-        std::cout << "Sending: " << flowerpotRequestsCount << " and " << choice << std::endl;
         return std::make_pair(brokenFlowerpotsCount, choice);
     }
     else
     {
         choice = TOILET;
-        std::cout << "Sending: " << toiletRequestsCount << " and " << choice << std::endl;
         return std::make_pair(brokenToiletsCount, choice);
     }
 }
@@ -400,30 +398,76 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
         break;
     }
 
-    //no access
-    if (stillWaiting == false)
-    {
-        return false;
-    }
-    //access
-    else if (stillWaiting == true)
-    {
-        return true;
-    }
+    //0 -> no access
+    //1 -> access
+    return stillWaiting;
 }
 
-void fixItem()
+void fixItem(std::pair<int, int> item)
 {
-    std::cout << "Sending Request from PID: " << myPID << std::endl;
+    //take some time to fix item
+    sleep(2);
+
+    //flowerpot choosen
+    if (item.first == FLOWERPOT)
+    {
+        //increment process clock
+        processLamport++;
+
+        //find flowerpot by id
+        int flowerpotID = item.second;
+        Flowerpot *flowerpot = potStatus[flowerpotID];
+
+        //update item status
+        flowerpot->status = REPAIRED;
+
+        //increment item changeStamp
+        flowerpot->changeStamp++;
+
+        //send fixed broadcast to others
+        broadcast(processLamport, item.first, flowerpotID, TAG_FIXED, totalProcesses, myPID);
+    }
+    //toilet choosen
+    else if (item.first == TOILET)
+    {
+        //increment process clock
+        processLamport++;
+
+        //find toilet by id
+        int toiletID = item.second;
+        Toilet *toilet = toilStatus[toiletID];
+
+        //update item status
+        toilet->status = REPAIRED;
+
+        //increment item changeStamp
+        toilet->changeStamp++;
+
+        //send fixed broadcast to others
+        broadcast(processLamport, item.first, toiletID, TAG_FIXED, totalProcesses, myPID);
+    }
 }
 
 void runBenefactorLoop()
 {
-
     while (run_program)
     {
         std::pair<int, int> choice = findItemToChange(true);
-        printf("[Benefactor %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
+
+        if(debugMode){
+            if (choice.first == FLOWERPOT){
+                printf("[Benefactor %d] Flowerpot with id %d chosen \n", myPID, choice.second);
+            }
+            else if (choice.first == TOILET){
+                printf("[Benefactor %d] Toilet with id %d chosen \n", myPID, choice.second);
+            }
+            else{
+                printf("[Benefactor %d] Nothing to fix \n", myPID);
+                sleep(2);
+                printf("[Benefactor %d] Starting new loop \n", myPID);
+                continue;
+            }
+        }
 
         //function which send request to others
         sendRequest(choice);
@@ -435,36 +479,93 @@ void runBenefactorLoop()
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
         bool canIEnter = waitForACK(gottenACK, stillWaiting);
 
+        //enter critical section
         if (canIEnter)
         {
-            //enter critical section increment your clock, update item status and send proper message to others.
-            //increment your clock.
-            fixItem();
-            sleep(5);
+            if (choice.first == FLOWERPOT){
+                printf("[Benefactor %d] Fixing flowerpot with id %d \n", myPID, choice.second);
+            }
+            else if (choice.first == TOILET){
+                printf("[Benefactor %d] Fixing Toilet with id %d \n", myPID, choice.second);
+            }
+
+            fixItem(choice);
         }
         else
         {
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
             //you didnt enter critical section, you dont increment your clock.
-            sleep(5);
+            printf("[Benefactor %d] Couldn't enter critical section", myPID);
+            sleep(2);
         }
         printf("[Benefactor %d] Starting new loop \n", myPID);
     }
 }
 
-void breakItem(std::pair<int, int> choice)
+void breakItem(std::pair<int, int> item)
 {
-    printf("[Thieve %d] is going to break %d, with ID: %d \n", myPID, choice.first, choice.second);
+    //take some time to break item
+    sleep(2);
+
+    //flowerpot choosen
+    if (item.first == FLOWERPOT)
+    {
+        //increment process clock
+        processLamport++;
+
+        //find flowerpot by id
+        int flowerpotID = item.second;
+        Flowerpot *flowerpot = potStatus[flowerpotID];
+
+        //update item status
+        flowerpot->status = BROKEN;
+
+        //increment item changeStamp
+        flowerpot->changeStamp++;
+
+        //send broken broadcast to others
+        broadcast(processLamport, item.first, flowerpotID, TAG_BROKEN, totalProcesses, myPID);
+    }
+    //toilet choosen
+    else if (item.first == TOILET)
+    {
+        //increment process clock
+        processLamport++;
+
+        //find toilet by id
+        int toiletID = item.second;
+        Toilet *toilet = toilStatus[toiletID];
+
+        //update item status
+        toilet->status = BROKEN;
+
+        //increment item changeStamp
+        toilet->changeStamp++;
+
+        //send broken broadcast to others
+        broadcast(processLamport, item.first, toiletID, TAG_BROKEN, totalProcesses, myPID);
+    }
 }
+
 void runThieveLoop()
 {
-
     while (run_program)
     {
         //should be findItemToBreak();
         std::pair<int, int> choice = findItemToChange(false);
-        printf("[Thieve %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
-        sleep(4);
+
+        if (choice.first == FLOWERPOT){
+            printf("[Thieve %d] Flowerpot with id %d chosen \n", myPID, choice.second);
+        }
+        else if (choice.first == TOILET){
+            printf("[Thieve %d] Toilet with id %d chosen \n", myPID, choice.second);
+        }
+        else{
+            printf("[Thieve %d] Nothing to break \n", myPID);
+            sleep(2);
+            printf("[Thieve %d] Starting new loop \n", myPID);
+            continue;
+        }
 
         //function which send request to others (add parameters)
         sendRequest(choice);
@@ -478,15 +579,22 @@ void runThieveLoop()
 
         if (canIEnter)
         {
-            //enter critical section increment your clock, update item status and send proper message to others.
+            if (choice.first == FLOWERPOT){
+                printf("[Thieve %d] Breaking flowerpot with id %d \n", myPID, choice.second);
+            }
+            else if (choice.first == TOILET){
+                printf("[Thieve %d] Breaking Toilet with id %d \n", myPID, choice.second);
+            }
+
             breakItem(choice);
         }
         else
         {
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
             printf("[Thieve %d] Couldn't enter critical section", myPID);
-            sleep(5);
+            sleep(2);
         }
+        printf("[Thieve %d] Starting new loop \n", myPID);
     }
 }
 
