@@ -92,14 +92,109 @@ void *benefactorReciever(void *thread)
     {
         MPI_Status status;
         int data[4]; //for message -> clock,senderID,  id of item to fix, changeStamp fixed item.
-
+        
         recieve(lamport_clock, data, status, MPI_ANY_TAG, myPID, MPI_ANY_SOURCE);
         int senderID = status.MPI_SOURCE;
+        int senderClock = data[0];
+        int senderMessage = data[1];
+        int senderChangeStamp = data[2];
+
         switch (status.MPI_TAG)
         {
-        case TAG_POT_TO_REPAIR:
+        case TAG_REPAIR_TOILET:
+            printf("[Benefactor %d] got access to repair toilet with id %d \n", myPID, data[1]);
+            break;
 
+        case TAG_REPAIR_POT:
+            printf("[Benefactor %d] got access to repair pot with id %d \n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_TO_BREAK:
+            printf("[Benefactor %d] got request for toilet with id %d to break\n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_TO_REPAIR:
+            printf("[Benefactor %d] got request for toilet with id %d to repair\n", myPID, data[1]);
+
+
+            //benefactor is requesting
+            if(processStatus == REQUESTING)
+            {
+                //for each request in toilRequests
+                for(Request request : toilRequests)
+                {
+                    //if it is our benefactor request
+                    if(request.pid == myPID)
+                    {
+                        //requested toilet id
+                        int toilID = senderMessage;
+
+                        //if same toilet requested
+                        if (request.rid == toilID)
+                        {
+                            //if our benefactor clock is lower (higher priority)
+                            if (processLamport < senderClock)
+                            {
+                                //send MY_TURN
+                            }
+                            //if our benefactor clock is equal
+                            else if (processLamport == senderClock)
+                            {
+                                //if our benefactor id is smaller
+                                if (myPID <= senderID)
+                                {
+                                    //send MY_TURN
+                                }
+                                //if our benefactor id is higher
+                                else if (senderID < myPID)
+                                {
+                                    //send ACK
+                                }
+                            }
+                            //if our benefactor clock is higher (lower priority)
+                            else if (senderClock < processLamport)
+                            {
+                                //send ACK
+                            }
+                        }
+                        //ur process is requesting something else
+                        else
+                        {
+                            //send ACK
+                        }
+                    }
+                }
+            }
+            //benefactor is not requesting
+            else if (processStatus == NOTREQUESTING)
+            {
+                //send ACK
+            }
+
+            break;
+
+        case TAG_POT_TO_BREAK:
+            printf("[Benefactor %d] got request for flowerpot with id %d to break\n", myPID, data[1]);
+            break;
+
+        case TAG_POT_TO_REPAIR:
             printf("[Benefactor %d] got request for flowerpot with id %d to repair\n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_BROKEN:
+            printf("[Benefactor %d] got info that toilet with id %d has been broken \n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_REPAIRED:
+            printf("[Benefactor %d] got info that toilet with id %d has been repaired \n", myPID, data[1]);
+            break;
+
+        case TAG_POT_BROKEN:
+            printf("[Benefactor %d] got info that pot with id %d has been broken \n", myPID, data[1]);
+            break;
+
+        case TAG_POT_REPAIRED:
+            printf("[Benefactor %d] got info that pot with id %d has been repaired \n", myPID, data[1]);
             break;
 
         default:
@@ -114,6 +209,56 @@ void *thieveReciever(void *thread)
 {
     while (run_program)
     {
+        MPI_Status status;
+        int data[4]; //for message -> clock,senderID,  id of item to fix, changeStamp fixed item.
+
+        recieve(lamport_clock, data, status, MPI_ANY_TAG, myPID, MPI_ANY_SOURCE);
+        int senderID = status.MPI_SOURCE;
+        switch (status.MPI_TAG)
+        {
+        case TAG_BREAK_TOILET:
+            printf("[Benefactor %d] got access to break toilet with id %d \n", myPID, data[1]);
+            break;
+
+        case TAG_BREAK_POT:
+            printf("[Benefactor %d] got access to break pot with id %d \n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_TO_BREAK:
+            printf("[Benefactor %d] got request for toilet with id %d to break\n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_TO_REPAIR:
+            printf("[Benefactor %d] got request for toilet with id %d to repair\n", myPID, data[1]);
+            break;
+
+        case TAG_POT_TO_BREAK:
+            printf("[Benefactor %d] got request for flowerpot with id %d to break\n", myPID, data[1]);
+            break;
+
+        case TAG_POT_TO_REPAIR:
+            printf("[Benefactor %d] got request for flowerpot with id %d to repair\n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_BROKEN:
+            printf("[Benefactor %d] got info that toilet with id %d has been broken \n", myPID, data[1]);
+            break;
+
+        case TAG_TOILET_REPAIRED:
+            printf("[Benefactor %d] got info that toilet with id %d has been repaired \n", myPID, data[1]);
+            break;
+
+        case TAG_POT_BROKEN:
+            printf("[Benefactor %d] got info that pot with id %d has been broken \n", myPID, data[1]);
+            break;
+
+        case TAG_POT_REPAIRED:
+            printf("[Benefactor %d] got info that pot with id %d has been repaired \n", myPID, data[1]);
+            break;
+
+        default:
+            break;
+        }
     }
 }
 
@@ -363,7 +508,7 @@ void sendRequest(std::pair<int, int> item)
         potsRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, flowerpotID, TAG_POT_TO_REPAIR, totalProcesses, myPID);
+        broadcast(processLamport, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_REPAIR, totalProcesses, myPID);
     }
     //toilet choosen
     else if (item.first == TOILET)
@@ -378,7 +523,7 @@ void sendRequest(std::pair<int, int> item)
         toilRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, toiletID, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+        broadcast(processLamport, toiletID, toilet->changeStamp, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
     }
 }
 
@@ -425,7 +570,7 @@ void fixItem(std::pair<int, int> item)
         flowerpot->changeStamp++;
 
         //send fixed broadcast to others
-        broadcast(processLamport, item.first, flowerpotID, TAG_FIXED, totalProcesses, myPID);
+        broadcast(processLamport, flowerpotID, flowerpot->changeStamp, TAG_POT_REPAIRED, totalProcesses, myPID);
     }
     //toilet choosen
     else if (item.first == TOILET)
@@ -444,7 +589,7 @@ void fixItem(std::pair<int, int> item)
         toilet->changeStamp++;
 
         //send fixed broadcast to others
-        broadcast(processLamport, item.first, toiletID, TAG_FIXED, totalProcesses, myPID);
+        broadcast(processLamport, toiletID, toilet->changeStamp, TAG_TOILET_REPAIRED, totalProcesses, myPID);
     }
 }
 
@@ -469,6 +614,8 @@ void runBenefactorLoop()
             }
         }
 
+        //process requesting resource now
+        processStatus = REQUESTING;
         //function which send request to others
         sendRequest(choice);
 
@@ -490,6 +637,9 @@ void runBenefactorLoop()
             }
 
             fixItem(choice);
+
+            //process in not requesting resource now
+            processStatus = NOTREQUESTING;
         }
         else
         {
@@ -524,7 +674,7 @@ void breakItem(std::pair<int, int> item)
         flowerpot->changeStamp++;
 
         //send broken broadcast to others
-        broadcast(processLamport, item.first, flowerpotID, TAG_BROKEN, totalProcesses, myPID);
+        broadcast(processLamport, flowerpotID, flowerpot->changeStamp, TAG_POT_BROKEN, totalProcesses, myPID);
     }
     //toilet choosen
     else if (item.first == TOILET)
@@ -543,7 +693,7 @@ void breakItem(std::pair<int, int> item)
         toilet->changeStamp++;
 
         //send broken broadcast to others
-        broadcast(processLamport, item.first, toiletID, TAG_BROKEN, totalProcesses, myPID);
+        broadcast(processLamport, toiletID, toilet->changeStamp, TAG_TOILET_BROKEN, totalProcesses, myPID);
     }
 }
 
@@ -649,8 +799,6 @@ int main(int argc, char *argv[])
         pthread_create(&reciever, NULL, benefactorReciever, 0);
         runBenefactorLoop();
     }
-
-    //  std::cout << "Hello, World!" << std::endl;
 
     run_program = false;
 

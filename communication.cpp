@@ -42,11 +42,20 @@ void recieve(int &clock, int data[], MPI_Status &status, int tag, int reviever, 
     pthread_mutex_unlock(&clock_mutex);
 }
 
-void broadcast(int &clock, int message, int extra_message, int tag, int world_size, int sender)
+void broadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender)
 {
     if (debugMode)
     {
         printf("[Process %d][TAG: %d] Send broadcast with %d and %d\n",
-               sender, tag, message, extra_message);
+               sender, tag, message, changeStamp);
+    }
+
+    //send message to all processes
+    for (int processID = 0; processID < world_size; processID++)
+    {
+        if (processID != sender)
+        {
+            send(clock, message, changeStamp, tag, processID, sender);
+        }
     }
 }
