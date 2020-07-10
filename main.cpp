@@ -18,6 +18,8 @@
 #define TOILET 1
 #define BROKEN 0
 #define REPAIRED 1
+#define BREAK 0
+#define FIX 1
 
 //number of flowerpots
 int F = 5;
@@ -285,18 +287,191 @@ void *benefactorReciever(void *thread)
 
         case TAG_TOILET_BROKEN:
             printf("[Benefactor %d] got info that toilet with id %d has been broken \n", myPID, data[1]);
+
+            {
+                //find toilet by id
+                int toilID = senderMessage;
+                Toilet * toilet = toilStatus[toilID];
+
+                //if toilet changeStamp is correct
+                if (toilet->changeStamp < senderChangeStamp)
+                {
+                    
+                    //update toilet status
+                    toilet->status = BROKEN;
+
+                    //increment item changeStamp
+                    toilet->changeStamp = senderChangeStamp;
+
+                    //iterate throu toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = toilRequests[i];
+
+                        //if it is same toilet
+                        if (request.rid == toilID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from toilRequests
+                            toilRequests.erase(toilRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                }
+            }
+
             break;
 
         case TAG_TOILET_REPAIRED:
             printf("[Benefactor %d] got info that toilet with id %d has been repaired \n", myPID, data[1]);
+            
+            {
+                //find toilet by id
+                int toiletID = senderMessage;
+                Toilet * toilet = toilStatus[toiletID];
+
+                //if toilet changeStamp is correct
+                if (toilet->changeStamp < senderChangeStamp)
+                {
+                    //update toilets status
+                    toilet->status = REPAIRED;
+
+                    //increment toilet changeStamp
+                    toilet->changeStamp = senderChangeStamp;
+
+                    //iterate throu toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = toilRequests[i];
+
+                        //if it is same toilet
+                        if (request.rid == toiletID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from toilRequests
+                            toilRequests.erase(toilRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                }
+            }
+
             break;
 
         case TAG_POT_BROKEN:
             printf("[Benefactor %d] got info that pot with id %d has been broken \n", myPID, data[1]);
+
+            {
+                //find pot by id
+                int potID = senderMessage;
+                Flowerpot * pot = potStatus[potID];
+
+                //if pot changeStamp is correct
+                if (pot->changeStamp < senderChangeStamp)
+                {
+                    //update pots status
+                    pot->status = BROKEN;
+
+                    //increment pot changeStamp
+                    pot->changeStamp = senderChangeStamp;
+
+                    //iterate throu potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = potsRequests[i];
+
+                        //if it is same pot
+                        if (request.rid == potID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from potsRequests
+                            potsRequests.erase(potsRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                }
+            }
+
             break;
 
         case TAG_POT_REPAIRED:
             printf("[Benefactor %d] got info that pot with id %d has been repaired \n", myPID, data[1]);
+            
+            {
+                //find pot by id
+                int potID = senderMessage;
+                Flowerpot * pot = potStatus[potID];
+
+                //if pot changeStamp is correct
+                if (pot->changeStamp < senderChangeStamp)
+                {
+                    //update pots status
+                    pot->status = REPAIRED;
+
+                    //increment pot changeStamp
+                    pot->changeStamp = senderChangeStamp;
+
+                    //iterate throu potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = potsRequests[i];
+
+                        //if it is same pot
+                        if (request.rid == potID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from potsRequests
+                            potsRequests.erase(potsRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                }
+            }
+            
             break;
 
         case TAG_MY_TURN:
@@ -524,18 +699,198 @@ void *thieveReciever(void *thread)
 
         case TAG_TOILET_BROKEN:
             printf("[Thieve %d] got info that toilet with id %d has been broken \n", myPID, data[1]);
+            
+            {
+                //find toilet by id
+                int toiletID = senderMessage;
+                Toilet * toilet = toilStatus[toiletID];
+
+                //if toilet changeStamp is correct
+                if (toilet->changeStamp < senderChangeStamp)
+                {
+                    //update toilets status
+                    toilet->status = BROKEN;
+
+                    //increment toilet changeStamp
+                    toilet->changeStamp = senderChangeStamp;
+
+                    //iterate throu toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = toilRequests[i];
+
+                        //if it is same toilet
+                        if (request.rid == toiletID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from toilRequests
+                            toilRequests.erase(toilRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                }
+            }
+            
             break;
 
         case TAG_TOILET_REPAIRED:
             printf("[Thieve %d] got info that toilet with id %d has been repaired \n", myPID, data[1]);
+            
+            {
+                //find toilet by id
+                int toilID = senderMessage;
+                Toilet * toilet = toilStatus[toilID];
+
+                //if toilet changeStamp is correct
+                if (toilet->changeStamp < senderChangeStamp)
+                {
+                    //update toilet status
+                    toilet->status = REPAIRED;
+
+                    //increment item changeStamp
+                    toilet->changeStamp = senderChangeStamp;
+
+                    //iterate throu toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = toilRequests[i];
+
+                        //if it is same toilet
+                        if (request.rid == toilID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from toilRequests
+                            toilRequests.erase(toilRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                }
+            }
+            
             break;
 
         case TAG_POT_BROKEN:
             printf("[Thieve %d] got info that pot with id %d has been broken \n", myPID, data[1]);
+            
+            {
+                //find pot by id
+                int potID = senderMessage;
+                Flowerpot * pot = potStatus[potID];
+
+                //if pot changeStamp is correct
+                if (pot->changeStamp < senderChangeStamp)
+                {
+                    //update pots status
+                    pot->status = REPAIRED;
+
+                    //increment pot changeStamp
+                    pot->changeStamp = senderChangeStamp;
+
+                    //iterate throu potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = potsRequests[i];
+
+                        //if it is same pot
+                        if (request.rid == potID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from potsRequests
+                            potsRequests.erase(potsRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                }
+            }
+            
             break;
 
         case TAG_POT_REPAIRED:
             printf("[Thieve %d] got info that pot with id %d has been repaired \n", myPID, data[1]);
+            
+            {
+                //find pot by id
+                int potID = senderMessage;
+                Flowerpot * pot = potStatus[potID];
+
+                //if pot changeStamp is correct
+                if (pot->changeStamp < senderChangeStamp)
+                {
+                    //update pots status
+                    pot->status = REPAIRED;
+
+                    //increment pot changeStamp
+                    pot->changeStamp = senderChangeStamp;
+
+                    //iterate throu potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        //take next request
+                        Request request = potsRequests[i];
+
+                        //if it is same pot
+                        if (request.rid == potID)
+                        {
+                            //if it is our process request
+                            if (request.pid == myPID)
+                            {
+                                processStatus = NOTREQUESTING;
+                            }
+
+                            //remove request from potsRequests
+                            potsRequests.erase(potsRequests.begin() + i);
+                        }
+                    }
+                }
+                //old message or error
+                else if (debugMode)
+                {
+                    printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n", 
+                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                }
+            }
+        
+            break;
+
+        case TAG_MY_TURN:
+            printf("[Thieve %d] got info to stop requesting \n", myPID, data[1]);
+            break;
+
+        case TAG_ACK:
+            printf("[Thieve %d] got ack from process%d \n", myPID, senderID);
             break;
 
         default:
@@ -613,31 +968,58 @@ void checkThread(int *argc, char **argv[])
 ////////////////////////////////////////////
 
 //choose to change flowerpot or toilet
-//0 -> flowerpot
-//1 -> toilet
+//toRepair == 0 -> find item to break
+//toRepair == 1 -> find item to fix
+//return pair (all available items, choice)
+//choice == 0 -> flowerpot
+//choice == 1 -> toilet
 std::pair<int, bool> flowerpotOrToilet(bool toRepair)
 {
-    //create broken flowerpots counter
-    int brokenFlowerpotsCount = 0;
+    //create flowerpots counter
+    int potsToChangeCount = 0;
     //count
     //for each flowerpot in potStatus
     for (auto flowerpot : potStatus)
     {
-        if (flowerpot->status == toRepair)
+        //find items to break
+        if (toRepair == false)
         {
-            brokenFlowerpotsCount++;
+            if (flowerpot->status == REPAIRED)
+            {
+                potsToChangeCount++;
+            }
+        }
+        //find items to fix
+        if (toRepair == true)
+        {
+            if (flowerpot->status == BROKEN)
+            {
+                potsToChangeCount++;
+            }
         }
     }
 
-    //create broken toilets counter
-    int brokenToiletsCount = 0;
+    //create toilets counter
+    int toilsToChangeCount = 0;
     //count
     //for each toilet in toilStatus
     for (auto toilet : toilStatus)
     {
-        if (toilet->status == toRepair)
+        //find items to break
+        if (toRepair == false)
         {
-            brokenToiletsCount++;
+            if (toilet->status == REPAIRED)
+            {
+                toilsToChangeCount++;
+            }
+        }
+        //find items to fix
+        if (toRepair == true)
+        {
+            if (toilet->status == BROKEN)
+            {
+                toilsToChangeCount++;
+            }
         }
     }
 
@@ -646,33 +1028,37 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
     int toiletRequestsCount = toilRequests.size();
 
     //calculate requests to resources ratio
-    double flowerpotsRatio = (brokenFlowerpotsCount == 0) ? 0.0 : flowerpotRequestsCount / brokenFlowerpotsCount;
-    double toiletsRatio = (brokenToiletsCount == 0) ? 0.0 : toiletRequestsCount / brokenToiletsCount;
+    double flowerpotsRatio = (potsToChangeCount == 0) ? 0.0 : flowerpotRequestsCount / potsToChangeCount;
+    double toiletsRatio = (toilsToChangeCount == 0) ? 0.0 : toiletRequestsCount / toilsToChangeCount;
 
     //choose smaller ratio
     bool choice;
     if (flowerpotsRatio < toiletsRatio)
     {
         choice = FLOWERPOT;
-        return std::make_pair(brokenFlowerpotsCount, choice);
+        return std::make_pair(potsToChangeCount, choice);
     }
     else
     {
         choice = TOILET;
-        return std::make_pair(brokenToiletsCount, choice);
+        return std::make_pair(toilsToChangeCount, choice);
     }
 }
 
-//find an item to fix
-//return item index from flowerpots/toilets vector
+//choose an item to change
+//toRepair == 0 -> find item to break
+//toRepair == 1 -> find item to fix
+//return pair (choice, itemID)
+//choice == -1 -> nothing to change
+//choice == 0 -> flowerpot
+//choice == 1 -> toilet
 std::pair<int, int> findItemToChange(bool toRepair)
 {
-    //choose to fix flowerpot or toilet
-    //0 -> flowerpot
-    //1 -> toilet
+    //find what to change
     std::pair<int, bool> choice = flowerpotOrToilet(toRepair);
 
-    //sign that there is no broken toilets and flowerpots so we have to wait some time for thieves to break something
+    //sign that there is no broken toilets and flowerpots 
+    //so we have to wait some time for thieves to break something
     if (choice.first == 0)
     {
         return std::make_pair(-1, -1);
@@ -775,37 +1161,77 @@ std::pair<int, int> findItemToChange(bool toRepair)
 } //int Benefactor::findItemToFix()
 
 //function which send request to others
-void sendRequest(std::pair<int, int> item)
+//requestType == 0 -> break request
+//requestType == 1 -> fix request
+void sendRequest(std::pair<int, int> item, bool requestType)
 {
-    //flowerpot choosen
-    if (item.first == FLOWERPOT)
+    //fix request
+    if (requestType == FIX)
     {
-        //find flowerpot by id
-        int flowerpotID = item.second;
-        Flowerpot *flowerpot = potStatus[flowerpotID];
+        //flowerpot choosen
+        if (item.first == FLOWERPOT)
+        {
+            //find flowerpot by id
+            int flowerpotID = item.second;
+            Flowerpot *flowerpot = potStatus[flowerpotID];
 
-        //create request
-        Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
-        //store request in global memory
-        potsRequests.push_back(request);
+            //create request
+            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
+            //store request in global memory
+            potsRequests.push_back(request);
 
-        //send req broadcast to other
-        broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_REPAIR, totalProcesses, myPID);
+            //send req broadcast to other
+            broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_REPAIR, totalProcesses, myPID);
+        }
+        //toilet choosen
+        else if (item.first == TOILET)
+        {
+            //find toilet by id
+            int toiletID = item.second;
+            Toilet *toilet = toilStatus[toiletID];
+
+            //create request
+            Request request(lamport_clock, myPID, toiletID, toilet->changeStamp);
+            //store request in global memory
+            toilRequests.push_back(request);
+
+            //send req broadcast to other
+            broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+        }
     }
-    //toilet choosen
-    else if (item.first == TOILET)
+    //break request
+    else if (requestType == BREAK)
     {
-        //find toilet by id
-        int toiletID = item.second;
-        Toilet *toilet = toilStatus[toiletID];
+        //flowerpot choosen
+        if (item.first == FLOWERPOT)
+        {
+            //find flowerpot by id
+            int flowerpotID = item.second;
+            Flowerpot *flowerpot = potStatus[flowerpotID];
 
-        //create request
-        Request request(lamport_clock, myPID, toiletID, toilet->changeStamp);
-        //store request in global memory
-        toilRequests.push_back(request);
+            //create request
+            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
+            //store request in global memory
+            potsRequests.push_back(request);
 
-        //send req broadcast to other
-        broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+            //send req broadcast to other
+            broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_BREAK, totalProcesses, myPID);
+        }
+        //toilet choosen
+        else if (item.first == TOILET)
+        {
+            //find toilet by id
+            int toiletID = item.second;
+            Toilet *toilet = toilStatus[toiletID];
+
+            //create request
+            Request request(lamport_clock, myPID, toiletID, toilet->changeStamp);
+            //store request in global memory
+            toilRequests.push_back(request);
+
+            //send req broadcast to other
+            broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_BREAK, totalProcesses, myPID);
+        }
     }
 }
 
@@ -911,7 +1337,7 @@ void runBenefactorLoop()
         //process requesting resource now
         processStatus = REQUESTING;
         //function which send request to others
-        sendRequest(choice);
+        sendRequest(choice, FIX);
 
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
         bool canIEnter = waitForACK(gottenACK, stillWaiting);
@@ -994,29 +1420,36 @@ void runThieveLoop()
 {
     while (run_program)
     {
-        //should be findItemToBreak();
         std::pair<int, int> choice = findItemToChange(false);
-
-        if (choice.first == FLOWERPOT){
-            printf("[Thieve %d] Flowerpot with id %d chosen \n", myPID, choice.second);
+        if(debugMode)
+        {
+            if (choice.first == FLOWERPOT){
+                printf("[Thieve %d] Flowerpot with id %d chosen \n", myPID, choice.second);
+            }
+            else if (choice.first == TOILET){
+                printf("[Thieve %d] Toilet with id %d chosen \n", myPID, choice.second);
+            }
+            else{
+                printf("[Thieve %d] Nothing to break \n", myPID);
+                sleep(2);
+                printf("[Thieve %d] Starting new loop \n", myPID);
+                continue;
+            }
         }
-        else if (choice.first == TOILET){
-            printf("[Thieve %d] Toilet with id %d chosen \n", myPID, choice.second);
-        }
-        else{
-            printf("[Thieve %d] Nothing to break \n", myPID);
+        //no item choosen
+        else if (choice.first == -1)
+        {
+            //nothing to break
+            //start new loop
             sleep(2);
-            printf("[Thieve %d] Starting new loop \n", myPID);
             continue;
         }
 
+        //process requesting resource now
+        processStatus = REQUESTING;
         //function which send request to others (add parameters)
-        sendRequest(choice);
+        sendRequest(choice, BREAK);
 
-        //ACK counter
-        int gottenACK = 0;
-        //set this to false when we won't get access to resource
-        bool stillWaiting = true;
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
         bool canIEnter = waitForACK(gottenACK, stillWaiting);
 
@@ -1030,9 +1463,15 @@ void runThieveLoop()
             }
 
             breakItem(choice);
+
+            //process in not requesting resource now
+            processStatus = NOTREQUESTING;
         }
         else
         {
+            //process in not requesting resource now
+            processStatus = NOTREQUESTING;
+
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
             printf("[Thieve %d] Couldn't enter critical section", myPID);
             sleep(2);
