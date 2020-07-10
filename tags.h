@@ -66,3 +66,8 @@
 //Tag using to inform process to stop requesting this resource
 #define TAG_MY_TURN 230
 #endif
+
+#ifndef TAG_ACK
+//Tag using to inform process to stop requesting this resource
+#define TAG_ACK 240
+#endif
