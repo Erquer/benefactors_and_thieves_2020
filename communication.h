@@ -6,6 +6,8 @@
 #define BENEFACTORS_AND_THIEVES_2020_COMMUNICATION_H
 
 #include <mpi/mpi.h>
+#include "utils.h"
+
 extern bool debugMode;
 
 void send(int &clock, int message, int changeStamp, int tag, int reciever, int sender);
