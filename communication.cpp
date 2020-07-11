@@ -49,4 +49,12 @@ void broadcast(int &clock, int message, int extra_message, int tag, int world_si
         printf("[Process %d][TAG: %d] Send broadcast with %d and %d\n",
                sender, tag, message, extra_message);
     }
+    for (int i = 0; i < world_size; i++)
+    {
+        //send to everyone except me
+        if (i != sender)
+        {
+            send(clock, message, extra_message, tag, i, sender);
+        }
+    }
 }

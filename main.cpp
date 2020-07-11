@@ -227,13 +227,13 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
     if (flowerpotsRatio < toiletsRatio)
     {
         choice = FLOWERPOT;
-        std::cout << "Sending: " << flowerpotRequestsCount << " and " << choice << std::endl;
+        // std::cout << "Sending: " << flowerpotRequestsCount << " and " << choice << std::endl;
         return std::make_pair(brokenFlowerpotsCount, choice);
     }
     else
     {
         choice = TOILET;
-        std::cout << "Sending: " << toiletRequestsCount << " and " << choice << std::endl;
+        // std::cout << "Sending: " << toiletRequestsCount << " and " << choice << std::endl;
         return std::make_pair(brokenToiletsCount, choice);
     }
 }
@@ -350,7 +350,7 @@ std::pair<int, int> findItemToChange(bool toRepair)
 } //int Benefactor::findItemToFix()
 
 //function which send request to others
-void sendRequest(std::pair<int, int> item)
+void sendRequest(std::pair<int, int> item, int tag)
 {
     //flowerpot choosen
     if (item.first == FLOWERPOT)
@@ -365,7 +365,7 @@ void sendRequest(std::pair<int, int> item)
         potsRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, flowerpotID, TAG_POT_TO_REPAIR, totalProcesses, myPID);
+        broadcast(processLamport, item.first, flowerpotID, tag, totalProcesses, myPID);
     }
     //toilet choosen
     else if (item.first == TOILET)
@@ -380,7 +380,7 @@ void sendRequest(std::pair<int, int> item)
         toilRequests.push_back(request);
 
         //send req broadcast to other
-        broadcast(processLamport, item.first, toiletID, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+        broadcast(processLamport, item.first, toiletID, tag, totalProcesses, myPID);
     }
 }
 
@@ -406,7 +406,7 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
         return false;
     }
     //access
-    else if (stillWaiting == true)
+    else
     {
         return true;
     }
@@ -422,11 +422,12 @@ void runBenefactorLoop()
 
     while (run_program)
     {
+        //1st = what object, 2nd = id of chosen obj.
         std::pair<int, int> choice = findItemToChange(true);
         printf("[Benefactor %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
 
         //function which send request to others
-        sendRequest(choice);
+        sendRequest(choice, (choice.first == TOILET) ? TAG_TOILET_TO_REPAIR : TAG_POT_TO_REPAIR);
 
         //ACK counter
         int gottenACK = 0;
@@ -461,13 +462,13 @@ void runThieveLoop()
 
     while (run_program)
     {
-        //should be findItemToBreak();
+        //pair made of 1st int = what is it, 2nd int = id.
         std::pair<int, int> choice = findItemToChange(false);
         printf("[Thieve %d] Chosen %d item with id %d \n", myPID, choice.first, choice.second);
         sleep(4);
 
         //function which send request to others (add parameters)
-        sendRequest(choice);
+        sendRequest(choice, (choice.first == TOILET) ? TAG_TOILET_TO_BREAK : TAG_POT_TO_BREAK);
 
         //ACK counter
         int gottenACK = 0;
@@ -546,7 +547,7 @@ int main(int argc, char *argv[])
 
     run_program = false;
 
-    printf("Waiting for others to complete working\n");
+    printf("[Process %d] Waiting for others to complete working\n", myPID);
     sleep(2);
 
     MPI_Finalize();
