@@ -20,11 +20,17 @@
 #define REPAIRED 1
 #define BREAK 0
 #define FIX 1
+#define THIEVE 0
+#define BENEFACTOR 1
 
 //number of flowerpots
-int F = 5;
+int F;
 //number of WC
-int W = 0;
+int W;
+//number of thieves
+int thievesCount;
+//number of benefactors
+int benefactorsCount;
 //number of processes
 int totalProcesses;
 //my ID
@@ -99,14 +105,6 @@ void *benefactorReciever(void *thread)
 
         case TAG_REPAIR_POT:
             printf("[Benefactor %d] got access to repair pot with id %d \n", myPID, data[1]);
-            break;
-
-        case TAG_TOILET_TO_BREAK:
-            printf("[Benefactor %d] got request for toilet with id %d to break\n", myPID, data[1]);
-
-            //send ACK
-            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
-
             break;
 
         case TAG_TOILET_TO_REPAIR:
@@ -190,14 +188,6 @@ void *benefactorReciever(void *thread)
                 //send ACK
                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
             }
-
-            break;
-
-        case TAG_POT_TO_BREAK:
-            printf("[Benefactor %d] got request for flowerpot with id %d to break\n", myPID, data[1]);
-
-            //send ACK
-            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
 
             break;
 
@@ -597,14 +587,6 @@ void *thieveReciever(void *thread)
 
             break;
 
-        case TAG_TOILET_TO_REPAIR:
-            printf("[Thieve %d] got request for toilet with id %d to repair\n", myPID, data[1]);
-
-            //send ACK
-            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
-
-            break;
-
         case TAG_POT_TO_BREAK:
             printf("[Thieve %d] got request for flowerpot with id %d to break\n", myPID, data[1]);
 
@@ -686,14 +668,6 @@ void *thieveReciever(void *thread)
                 //send ACK
                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
             }
-
-            break;
-
-        case TAG_POT_TO_REPAIR:
-            printf("[Thieve %d] got request for flowerpot with id %d to repair\n", myPID, data[1]);
-
-            //send ACK
-            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
 
             break;
 
@@ -1161,30 +1135,11 @@ std::pair<int, int> findItemToChange(bool toRepair)
 } //int Benefactor::findItemToFix()
 
 //function which send request to others
-//requestType == 0 -> break request
-//requestType == 1 -> fix request
-void sendRequest(std::pair<int, int> item, bool requestType)
+void sendRequest(std::pair<int, int> item, int tag)
 {
-    //fix request
-    if (requestType == FIX)
+    switch (tag)
     {
-        //flowerpot choosen
-        if (item.first == FLOWERPOT)
-        {
-            //find flowerpot by id
-            int flowerpotID = item.second;
-            Flowerpot *flowerpot = potStatus[flowerpotID];
-
-            //create request
-            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
-            //store request in global memory
-            potsRequests.push_back(request);
-
-            //send req broadcast to other
-            broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_REPAIR, totalProcesses, myPID);
-        }
-        //toilet choosen
-        else if (item.first == TOILET)
+        case TAG_TOILET_TO_BREAK:
         {
             //find toilet by id
             int toiletID = item.second;
@@ -1196,29 +1151,11 @@ void sendRequest(std::pair<int, int> item, bool requestType)
             toilRequests.push_back(request);
 
             //send req broadcast to other
-            broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+            thievesBroadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_BREAK, totalProcesses, myPID);
+            break;
         }
-    }
-    //break request
-    else if (requestType == BREAK)
-    {
-        //flowerpot choosen
-        if (item.first == FLOWERPOT)
-        {
-            //find flowerpot by id
-            int flowerpotID = item.second;
-            Flowerpot *flowerpot = potStatus[flowerpotID];
 
-            //create request
-            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
-            //store request in global memory
-            potsRequests.push_back(request);
-
-            //send req broadcast to other
-            broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_BREAK, totalProcesses, myPID);
-        }
-        //toilet choosen
-        else if (item.first == TOILET)
+        case TAG_TOILET_TO_REPAIR:
         {
             //find toilet by id
             int toiletID = item.second;
@@ -1230,7 +1167,40 @@ void sendRequest(std::pair<int, int> item, bool requestType)
             toilRequests.push_back(request);
 
             //send req broadcast to other
-            broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_BREAK, totalProcesses, myPID);
+            benefactorsBroadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_TO_REPAIR, totalProcesses, myPID);
+            break;
+        }
+
+        case TAG_POT_TO_BREAK:
+        {
+            //find flowerpot by id
+            int flowerpotID = item.second;
+            Flowerpot *flowerpot = potStatus[flowerpotID];
+
+            //create request
+            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
+            //store request in global memory
+            potsRequests.push_back(request);
+
+            //send req broadcast to other
+            thievesBroadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_BREAK, totalProcesses, myPID);
+            break;
+        }
+
+        case TAG_POT_TO_REPAIR:
+        {
+            //find flowerpot by id
+            int flowerpotID = item.second;
+            Flowerpot *flowerpot = potStatus[flowerpotID];
+
+            //create request
+            Request request(lamport_clock, myPID, flowerpotID, flowerpot->changeStamp);
+            //store request in global memory
+            potsRequests.push_back(request);
+
+            //send req broadcast to other
+            benefactorsBroadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_TO_REPAIR, totalProcesses, myPID);
+            break;
         }
     }
 }
@@ -1245,10 +1215,23 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
         printf("[Process %d] Waiting for D - 1 ACK\n", myPID);
     }
 
-    //wait for access
-    while (gottenACK <= totalProcesses - 1 && stillWaiting)
+    //our process is a thieve
+    if (myPID % 2 == THIEVE)
     {
-        break;
+        //wait for access
+        while (gottenACK <= thievesCount - 1 && stillWaiting)
+        {
+            continue;
+        }
+    }
+    //our process is a benefactor
+    else if (myPID % 2 == BENEFACTOR)
+    {
+        //wait for access
+        while (gottenACK <= benefactorsCount - 1 && stillWaiting)
+        {
+            continue;
+        }
     }
 
     //0 -> no access
@@ -1523,6 +1506,11 @@ int main(int argc, char *argv[])
     //Get ours PID and total processes.
     MPI_Comm_rank(MPI_COMM_WORLD, &myPID);
     MPI_Comm_size(MPI_COMM_WORLD, &totalProcesses);
+
+    //calculate benefactors and thieves count
+    //if totalProcesses number is odd, there will be more thieves
+    benefactorsCount = totalProcesses / 2;
+    thievesCount = totalProcesses - benefactorsCount;
 
     //initialize vectors with flowerpots and toilets
     initData(argc, argv);

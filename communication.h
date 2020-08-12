@@ -14,6 +14,10 @@ void send(int &clock, int message, int changeStamp, int tag, int reciever, int s
 
 void recieve(int &clock, int data[], MPI_Status &status, int tag, int reviever, int sender);
 
-void broadcast(int &clock, int message, int extra_message, int tag, int world_size, int sender);
+void broadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender);
+
+void thievesBroadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender);
+
+void benefactorsBroadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender);
 
 #endif //BENEFACTORS_AND_THIEVES_2020_COMMUNICATION_H

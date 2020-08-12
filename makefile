@@ -5,7 +5,7 @@ OUTPUT_FILE := thieves_benefactors
 all: clean $(OUTPUT_FILE)
 
 $(OUTPUT_FILE): $(SOURCES) $(HEADERS)
-	mpic++ -Wall -pthread -o $(OUTPUT_FILE) $(SOURCES)
+	mpiCC -Wall -pthread -o $(OUTPUT_FILE) $(SOURCES)
 
 clean:
 	$(RM) $(OUTPUT_FILE)

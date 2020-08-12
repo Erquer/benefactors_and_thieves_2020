@@ -58,12 +58,42 @@ void broadcast(int &clock, int message, int changeStamp, int tag, int world_size
             send(clock, message, changeStamp, tag, processID, sender);
         }
     }
-    for (int i = 0; i < world_size; i++)
+}
+
+//send broadcast but only to thieves
+void thievesBroadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender)
+{
+    if (debugMode)
     {
-        //send to everyone except me
-        if (i != sender)
+        printf("[Process %d][TAG: %d] Send thieves broadcast with %d and %d\n",
+               sender, tag, message, changeStamp);
+    }
+
+    //send message to all processes
+    for (int processID = 0; processID < world_size; processID += 2)
+    {
+        if (processID != sender)
         {
-            send(clock, message, extra_message, tag, i, sender);
+            send(clock, message, changeStamp, tag, processID, sender);
+        }
+    }
+}
+
+//send broadcast but only to thieves
+void benefactorsBroadcast(int &clock, int message, int changeStamp, int tag, int world_size, int sender)
+{
+    if (debugMode)
+    {
+        printf("[Process %d][TAG: %d] Send benefactors broadcast with %d and %d\n",
+               sender, tag, message, changeStamp);
+    }
+
+    //send message to all processes
+    for (int processID = 1; processID < world_size; processID += 2)
+    {
+        if (processID != sender)
+        {
+            send(clock, message, changeStamp, tag, processID, sender);
         }
     }
 }
