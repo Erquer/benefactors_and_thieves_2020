@@ -1,3 +1,5 @@
 # Project exclude paths
 /cmake-build-debug/
-./thieves_benefactors
+thieves_benefactors
+.idea*
+.vscode*
