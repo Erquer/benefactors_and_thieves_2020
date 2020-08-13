@@ -14,10 +14,11 @@
 
 #define NOTREQUESTING 0
 #define REQUESTING 1
+#define INCRITICALSECTION 2
 #define FLOWERPOT 0
 #define TOILET 1
 #define BROKEN 0
-#define REPAIRED 1
+#define FIXED 1
 #define BREAK 0
 #define FIX 1
 #define THIEVE 0
@@ -38,7 +39,7 @@ int myPID;
 //parameten needed to proper threads managment
 bool run_program = true;
 //debug mode - show additional messages while working
-bool debugMode = true;
+bool debugMode = false;
 
 /*
  * Process variables
@@ -47,7 +48,7 @@ bool debugMode = true;
 int lamport_clock = 0;
 //0 -> process not requesting resources
 //1 -> process requesting a resource
-bool processStatus = NOTREQUESTING;
+int processStatus = NOTREQUESTING;
 
 /*
  * Process variables when waiting for ACK
@@ -94,8 +95,8 @@ void *benefactorReciever(void *thread)
         recieve(lamport_clock, data, status, MPI_ANY_TAG, myPID, MPI_ANY_SOURCE);
         int senderID = status.MPI_SOURCE;
         int senderClock = data[0];
-        int senderMessage = data[1];
-        int senderChangeStamp = data[2];
+        int resourceID = data[1];
+        int requestedResourceChangeStamp = data[2];
 
         switch (status.MPI_TAG)
         {
@@ -106,83 +107,204 @@ void *benefactorReciever(void *thread)
                 printf("[Benefactor %d] got request for toilet with id %d to repair\n", myPID, data[1]);
             }
 
-            //benefactor is requesting
-            if (processStatus == REQUESTING)
-            {
-                //for each request in toilRequests
-                for (Request request : toilRequests)
-                {
-                    //if it is our benefactor request
-                    if (request.pid == myPID)
-                    {
-                        //requested toilet id
-                        int toilID = senderMessage;
+            //find requested toilet
+            Toilet * toilet = toilStatus[resourceID];
 
-                        //if same toilet requested
-                        if (request.rid == toilID)
+            //if request is from the future
+            if(toilet->changeStamp < requestedResourceChangeStamp)
+            {
+                //delete all other requests to this toilet from the past
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if same toilet requested
+                    if (request.rid == resourceID)
+                    {
+                        //if it is our benefactor request
+                        if (request.pid == myPID)
                         {
-                            //if our benefactor clock is lower (higher priority)
-                            if (lamport_clock < senderClock)
+                            processStatus = NOTREQUESTING;
+                        }
+
+                        //delete request
+                        toilRequests.erase(toilRequests.begin() + i);
+                    }
+                }
+
+                //update toilet changeStamp
+                toilet->changeStamp = requestedResourceChangeStamp;
+
+                //add sender request to toilRequests
+                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                toilRequests.push_back(senderRequest);
+
+                //send ACK
+                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+            }
+            //if request is from the present
+            else if(toilet->changeStamp == requestedResourceChangeStamp)
+            {
+                //benefactor is not requesting
+                if (processStatus == NOTREQUESTING)
+                {
+                    //add sender request to toilRequests
+                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                    toilRequests.push_back(senderRequest);
+
+                    //send ACK
+                    send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                }
+                //benefactor is requesting
+                else if (processStatus == REQUESTING)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        Request request = toilRequests[i];
+
+                        //if it is our benefactor request
+                        if (request.pid == myPID)
+                        {
+                            //if same toilet requested
+                            if (request.rid == resourceID)
                             {
-                                //send MY_TURN
-                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
-                            }
-                            //if our benefactor clock is equal
-                            else if (lamport_clock == senderClock)
-                            {
-                                //if our benefactor id is smaller
-                                if (myPID <= senderID)
+                                //if our benefactor clock is lower (higher priority)
+                                if (lamport_clock < senderClock)
                                 {
+                                    isRespondFound = true;
+
                                     //send MY_TURN
                                     send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
                                 }
-                                //if our benefactor id is higher
-                                else if (senderID < myPID)
+                                //if our benefactor clock is equal
+                                else if (lamport_clock == senderClock)
+                                {
+                                    //if our benefactor id is smaller
+                                    if (myPID <= senderID)
+                                    {
+                                        isRespondFound = true;
+
+                                        //send MY_TURN
+                                        send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                                    }
+                                    //if our benefactor id is higher
+                                    else if (senderID < myPID)
+                                    {
+                                        //add sender request to toilRequests
+                                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                        toilRequests.push_back(senderRequest);
+
+                                        isRespondFound = true;
+
+                                        //send ACK
+                                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                                    }
+                                }
+                                //if our benefactor clock is higher (lower priority)
+                                else if (senderClock < lamport_clock)
                                 {
                                     //add sender request to toilRequests
-                                    Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
+                                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                     toilRequests.push_back(senderRequest);
+
+                                    isRespondFound = true;
 
                                     //send ACK
                                     send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                                 }
                             }
-                            //if our benefactor clock is higher (lower priority)
-                            else if (senderClock < lamport_clock)
+                            //ur benefactor is requesting something else
+                            else
                             {
                                 //add sender request to toilRequests
-                                Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                 toilRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
 
                                 //send ACK
                                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                             }
-                        }
-                        //ur process is requesting something else
-                        else
-                        {
-                            //add sender request to toilRequests
-                            Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
-                            toilRequests.push_back(senderRequest);
 
-                            //send ACK
-                            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            //we found our process request
+                            break;
                         }
+                    }
+
+                    if (!isRespondFound)
+                    {
+                        //add sender request to toilRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        toilRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                    }
+                }
+                //benefactor is fixing something
+                else if (processStatus == INCRITICALSECTION)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        Request request = toilRequests[i];
+
+                        //if it is our benefactor request
+                        if (request.pid == myPID)
+                        {
+                            //if same toilet requested
+                            if (request.rid == resourceID)
+                            {
+                                isRespondFound = true;
+
+                                //send MY_TURN
+                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                            }
+                            //ur benefactor is fixing something else
+                            else
+                            {
+                                //add sender request to toilRequests
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                toilRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
+
+                                //send ACK
+                                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            }
+
+                            //we found our process request
+                            break;
+                        }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to toilRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        toilRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                     }
                 }
             }
-            //benefactor is not requesting
-            else if (processStatus == NOTREQUESTING)
+            //if request is from the past
+            if(requestedResourceChangeStamp < toilet->changeStamp)
             {
-                //requested toilet id
-                int toilID = senderMessage;
-
-                //add sender request to toilRequests
-                Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
-                toilRequests.push_back(senderRequest);
-
-                //send ACK
-                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                
             }
 
             break;
@@ -195,83 +317,204 @@ void *benefactorReciever(void *thread)
                 printf("[Benefactor %d] got request for flowerpot with id %d to repair\n", myPID, data[1]);
             }
 
-            //benefactor is requesting
-            if (processStatus == REQUESTING)
-            {
-                //for each request in potsRequests
-                for (Request request : potsRequests)
-                {
-                    //if it is our benefactor request
-                    if (request.pid == myPID)
-                    {
-                        //requested pot id
-                        int potID = senderMessage;
+            //find requested flowerpot
+            Flowerpot * flowerpot = potStatus[resourceID];
 
-                        //if same pot requested
-                        if (request.rid == potID)
+            //if request is from the future
+            if(flowerpot->changeStamp < requestedResourceChangeStamp)
+            {
+                //delete all other requests to this flowerpot from the past
+                //for each request in potsRequests
+                for (int i = 0; i < potsRequests.size(); i++)
+                {
+                    Request request = potsRequests[i];
+
+                    //if same flowerpot requested
+                    if (request.rid == resourceID)
+                    {
+                        //if it is our benefactor request
+                        if (request.pid == myPID)
                         {
-                            //if our benefactor clock is lower (higher priority)
-                            if (lamport_clock < senderClock)
+                            processStatus = NOTREQUESTING;
+                        }
+
+                        //delete request
+                        potsRequests.erase(potsRequests.begin() + i);
+                    }
+                }
+
+                //update flowerpot changeStamp
+                flowerpot->changeStamp = requestedResourceChangeStamp;
+
+                //add sender request to potsRequests
+                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                potsRequests.push_back(senderRequest);
+
+                //send ACK
+                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+            }
+            //if request is from the present
+            else if(flowerpot->changeStamp == requestedResourceChangeStamp)
+            {
+                //benefactor is not requesting
+                if (processStatus == NOTREQUESTING)
+                {
+                    //add sender request to potsRequests
+                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                    potsRequests.push_back(senderRequest);
+
+                    //send ACK
+                    send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                }
+                //benefactor is requesting
+                else if (processStatus == REQUESTING)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        Request request = potsRequests[i];
+
+                        //if it is our benefactor request
+                        if (request.pid == myPID)
+                        {
+                            //if same flowerpot requested
+                            if (request.rid == resourceID)
                             {
-                                //send MY_TURN
-                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
-                            }
-                            //if our benefactor clock is equal
-                            else if (lamport_clock == senderClock)
-                            {
-                                //if our benefactor id is smaller
-                                if (myPID <= senderID)
+                                //if our benefactor clock is lower (higher priority)
+                                if (lamport_clock < senderClock)
                                 {
+                                    isRespondFound = true;
+
                                     //send MY_TURN
                                     send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
                                 }
-                                //if our benefactor id is higher
-                                else if (senderID < myPID)
+                                //if our benefactor clock is equal
+                                else if (lamport_clock == senderClock)
+                                {
+                                    //if our benefactor id is smaller
+                                    if (myPID <= senderID)
+                                    {
+                                        isRespondFound = true;
+
+                                        //send MY_TURN
+                                        send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                                    }
+                                    //if our benefactor id is higher
+                                    else if (senderID < myPID)
+                                    {
+                                        //add sender request to potsRequests
+                                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                        potsRequests.push_back(senderRequest);
+
+                                        isRespondFound = true;
+
+                                        //send ACK
+                                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                                    }
+                                }
+                                //if our benefactor clock is higher (lower priority)
+                                else if (senderClock < lamport_clock)
                                 {
                                     //add sender request to potsRequests
-                                    Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
+                                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                     potsRequests.push_back(senderRequest);
+
+                                    isRespondFound = true;
 
                                     //send ACK
                                     send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                                 }
                             }
-                            //if our benefactor clock is higher (lower priority)
-                            else if (senderClock < lamport_clock)
+                            //ur benefactor is requesting something else
+                            else
                             {
                                 //add sender request to potsRequests
-                                Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                 potsRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
 
                                 //send ACK
                                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                             }
-                        }
-                        //ur process is requesting something else
-                        else
-                        {
-                            //add sender request to potsRequests
-                            Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
-                            potsRequests.push_back(senderRequest);
 
-                            //send ACK
-                            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            //we found our process request
+                            break;
                         }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to potsRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        potsRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                    }
+                }
+                //benefactor is fixing something
+                else if (processStatus == INCRITICALSECTION)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        Request request = potsRequests[i];
+
+                        //if it is our thieve request
+                        if (request.pid == myPID)
+                        {
+                            //if same flowerpot requested
+                            if (request.rid == resourceID)
+                            {
+                                isRespondFound = true;
+
+                                //send MY_TURN
+                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                            }
+                            //ur thieve is fixing something else
+                            else
+                            {
+                                //add sender request to potsRequests
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                potsRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
+
+                                //send ACK
+                                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            }
+
+                            //we found our process request
+                            break;
+                        }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to potsRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        potsRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+                        
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                     }
                 }
             }
-            //benefactor is not requesting
-            else if (processStatus == NOTREQUESTING)
+            //if request is from the past
+            if(requestedResourceChangeStamp < flowerpot->changeStamp)
             {
-                //requested pot id
-                int potID = senderMessage;
-
-                //add sender request to potsRequests
-                Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
-                potsRequests.push_back(senderRequest);
-
-                //send ACK
-                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                
             }
 
             break;
@@ -285,18 +528,18 @@ void *benefactorReciever(void *thread)
             }
 
             //find toilet by id
-            int toilID = senderMessage;
-            Toilet *toilet = toilStatus[toilID];
+            int resourceID = resourceID;
+            Toilet *toilet = toilStatus[resourceID];
 
             //if toilet changeStamp is correct
-            if (toilet->changeStamp < senderChangeStamp)
+            if (toilet->changeStamp < requestedResourceChangeStamp)
             {
 
                 //update toilet status
                 toilet->status = BROKEN;
 
                 //increment item changeStamp
-                toilet->changeStamp = senderChangeStamp;
+                toilet->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu toilRequests
                 for (int i = 0; i < toilRequests.size(); i++)
@@ -305,7 +548,7 @@ void *benefactorReciever(void *thread)
                     Request request = toilRequests[i];
 
                     //if it is same toilet
-                    if (request.rid == toilID)
+                    if (request.rid == resourceID)
                     {
                         //if it is our process request
                         if (request.pid == myPID)
@@ -322,7 +565,7 @@ void *benefactorReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, toilet->changeStamp + 1);
             }
 
             break;
@@ -336,17 +579,17 @@ void *benefactorReciever(void *thread)
             }
 
             //find toilet by id
-            int toiletID = senderMessage;
+            int toiletID = resourceID;
             Toilet *toilet = toilStatus[toiletID];
 
             //if toilet changeStamp is correct
-            if (toilet->changeStamp < senderChangeStamp)
+            if (toilet->changeStamp < requestedResourceChangeStamp)
             {
                 //update toilets status
-                toilet->status = REPAIRED;
+                toilet->status = FIXED;
 
                 //increment toilet changeStamp
-                toilet->changeStamp = senderChangeStamp;
+                toilet->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu toilRequests
                 for (int i = 0; i < toilRequests.size(); i++)
@@ -372,7 +615,7 @@ void *benefactorReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, toilet->changeStamp + 1);
             }
 
             break;
@@ -386,17 +629,17 @@ void *benefactorReciever(void *thread)
             }
 
             //find pot by id
-            int potID = senderMessage;
+            int potID = resourceID;
             Flowerpot *pot = potStatus[potID];
 
             //if pot changeStamp is correct
-            if (pot->changeStamp < senderChangeStamp)
+            if (pot->changeStamp < requestedResourceChangeStamp)
             {
                 //update pots status
                 pot->status = BROKEN;
 
                 //increment pot changeStamp
-                pot->changeStamp = senderChangeStamp;
+                pot->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu potsRequests
                 for (int i = 0; i < potsRequests.size(); i++)
@@ -422,7 +665,7 @@ void *benefactorReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, pot->changeStamp + 1);
             }
 
             break;
@@ -436,17 +679,17 @@ void *benefactorReciever(void *thread)
             }
 
             //find pot by id
-            int potID = senderMessage;
+            int potID = resourceID;
             Flowerpot *pot = potStatus[potID];
 
             //if pot changeStamp is correct
-            if (pot->changeStamp < senderChangeStamp)
+            if (pot->changeStamp < requestedResourceChangeStamp)
             {
                 //update pots status
-                pot->status = REPAIRED;
+                pot->status = FIXED;
 
                 //increment pot changeStamp
-                pot->changeStamp = senderChangeStamp;
+                pot->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu potsRequests
                 for (int i = 0; i < potsRequests.size(); i++)
@@ -472,7 +715,7 @@ void *benefactorReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, pot->changeStamp + 1);
             }
 
             break;
@@ -488,6 +731,37 @@ void *benefactorReciever(void *thread)
             //stop waiting for ack and stop requesting
             stillWaiting = false;
             processStatus = NOTREQUESTING;
+
+            //delete our process request
+            bool requestFound = false;
+            //for each request in potsRequests
+            for (int i = 0; i < potsRequests.size(); i++)
+            {
+                Request request = potsRequests[i];
+
+                //if it is our benefactor request
+                if (request.pid == myPID)
+                {
+                    potsRequests.erase(potsRequests.begin() + i);   
+                    requestFound = true;
+                    break;
+                }
+            }
+            if (!requestFound)
+            {
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if it is our benefactor request
+                    if (request.pid == myPID)
+                    {
+                        toilRequests.erase(toilRequests.begin() + i);   
+                        break;
+                    }
+                }
+            }
 
             break;
         }
@@ -526,8 +800,8 @@ void *thieveReciever(void *thread)
         recieve(lamport_clock, data, status, MPI_ANY_TAG, myPID, MPI_ANY_SOURCE);
         int senderID = status.MPI_SOURCE;
         int senderClock = data[0];
-        int senderMessage = data[1];
-        int senderChangeStamp = data[2];
+        int resourceID = data[1];
+        int requestedResourceChangeStamp = data[2];
 
         switch (status.MPI_TAG)
         {
@@ -538,83 +812,204 @@ void *thieveReciever(void *thread)
                 printf("[Thieve %d] got request for toilet with id %d to break\n", myPID, data[1]);
             }
 
-            //thieve is requesting
-            if (processStatus == REQUESTING)
-            {
-                //for each request in toilRequests
-                for (Request request : toilRequests)
-                {
-                    //if it is our thieve request
-                    if (request.pid == myPID)
-                    {
-                        //requested toilet id
-                        int toilID = senderMessage;
+            //find requested toilet
+            Toilet * toilet = toilStatus[resourceID];
 
-                        //if same toilet requested
-                        if (request.rid == toilID)
+            //if request is from the future
+            if(toilet->changeStamp < requestedResourceChangeStamp)
+            {
+                //delete all other requests to this toilet from the past
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if same toilet requested
+                    if (request.rid == resourceID)
+                    {
+                        //if it is our thieve request
+                        if (request.pid == myPID)
                         {
-                            //if our thieve clock is lower (higher priority)
-                            if (lamport_clock < senderClock)
+                            processStatus = NOTREQUESTING;
+                        }
+
+                        //delete request
+                        toilRequests.erase(toilRequests.begin() + i);
+                    }
+                }
+
+                //update toilet changeStamp
+                toilet->changeStamp = requestedResourceChangeStamp;
+
+                //add sender request to toilRequests
+                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                toilRequests.push_back(senderRequest);
+
+                //send ACK
+                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+            }
+            //if request is from the present
+            else if(toilet->changeStamp == requestedResourceChangeStamp)
+            {
+                //thieve is not requesting
+                if (processStatus == NOTREQUESTING)
+                {
+                    //add sender request to toilRequests
+                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                    toilRequests.push_back(senderRequest);
+
+                    //send ACK
+                    send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                }
+                //thieve is requesting
+                else if (processStatus == REQUESTING)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        Request request = toilRequests[i];
+
+                        //if it is our thieve request
+                        if (request.pid == myPID)
+                        {
+                            //if same toilet requested
+                            if (request.rid == resourceID)
                             {
-                                //send MY_TURN
-                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
-                            }
-                            //if our thieve clock is equal
-                            else if (lamport_clock == senderClock)
-                            {
-                                //if our thieve id is smaller
-                                if (myPID <= senderID)
+                                //if our thieve clock is lower (higher priority)
+                                if (lamport_clock < senderClock)
                                 {
+                                    isRespondFound = true;
+
                                     //send MY_TURN
                                     send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
                                 }
-                                //if our thieve id is higher
-                                else if (senderID < myPID)
+                                //if our thieve clock is equal
+                                else if (lamport_clock == senderClock)
+                                {
+                                    //if our thieve id is smaller
+                                    if (myPID <= senderID)
+                                    {
+                                        isRespondFound = true;
+
+                                        //send MY_TURN
+                                        send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                                    }
+                                    //if our thieve id is higher
+                                    else if (senderID < myPID)
+                                    {
+                                        //add sender request to toilRequests
+                                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                        toilRequests.push_back(senderRequest);
+
+                                        isRespondFound = true;
+
+                                        //send ACK
+                                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                                    }
+                                }
+                                //if our thieve clock is higher (lower priority)
+                                else if (senderClock < lamport_clock)
                                 {
                                     //add sender request to toilRequests
-                                    Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
+                                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                     toilRequests.push_back(senderRequest);
+
+                                    isRespondFound = true;
 
                                     //send ACK
                                     send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                                 }
                             }
-                            //if our thieve clock is higher (lower priority)
-                            else if (senderClock < lamport_clock)
+                            //ur thieve is requesting something else
+                            else
                             {
                                 //add sender request to toilRequests
-                                Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                 toilRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
 
                                 //send ACK
                                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                             }
-                        }
-                        //ur thieve is requesting something else
-                        else
-                        {
-                            //add sender request to toilRequests
-                            Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
-                            toilRequests.push_back(senderRequest);
 
-                            //send ACK
-                            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            //we found our process request
+                            break;
                         }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to toilRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        toilRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                    }
+                }
+                //thieve is breaking something
+                else if (processStatus == INCRITICALSECTION)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in toilRequests
+                    for (int i = 0; i < toilRequests.size(); i++)
+                    {
+                        Request request = toilRequests[i];
+
+                        //if it is our thieve request
+                        if (request.pid == myPID)
+                        {
+                            //if same toilet requested
+                            if (request.rid == resourceID)
+                            {
+                                isRespondFound = true;
+
+                                //send MY_TURN
+                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                            }
+                            //ur thieve is breaking something else
+                            else
+                            {
+                                //add sender request to toilRequests
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                toilRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
+
+                                //send ACK
+                                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            }
+
+                            //we found our process request
+                            break;
+                        }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to toilRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        toilRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                     }
                 }
             }
-            //thieve is not requesting
-            else if (processStatus == NOTREQUESTING)
+            //if request is from the past
+            if(requestedResourceChangeStamp < toilet->changeStamp)
             {
-                //requested toilet id
-                int toilID = senderMessage;
-
-                //add sender request to toilRequests
-                Request senderRequest(senderClock, senderID, toilID, senderChangeStamp);
-                toilRequests.push_back(senderRequest);
-
-                //send ACK
-                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                
             }
 
             break;
@@ -626,84 +1021,205 @@ void *thieveReciever(void *thread)
             {
                 printf("[Thieve %d] got request for flowerpot with id %d to break\n", myPID, data[1]);
             }
+            
+            //find requested flowerpot
+            Flowerpot * flowerpot = potStatus[resourceID];
 
-            //thieve is requesting
-            if (processStatus == REQUESTING)
+            //if request is from the future
+            if(flowerpot->changeStamp < requestedResourceChangeStamp)
             {
+                //delete all other requests to this flowerpot from the past
                 //for each request in potsRequests
-                for (Request request : potsRequests)
+                for (int i = 0; i < potsRequests.size(); i++)
                 {
-                    //if it is our thieve request
-                    if (request.pid == myPID)
-                    {
-                        //requested pot id
-                        int potID = senderMessage;
+                    Request request = potsRequests[i];
 
-                        //if same pot requested
-                        if (request.rid == potID)
+                    //if same flowerpot requested
+                    if (request.rid == resourceID)
+                    {
+                        //if it is our thieve request
+                        if (request.pid == myPID)
                         {
-                            //if our thieve clock is lower (higher priority)
-                            if (lamport_clock < senderClock)
+                            processStatus = NOTREQUESTING;
+                        }
+
+                        //delete request
+                        potsRequests.erase(potsRequests.begin() + i);
+                    }
+                }
+
+                //update flowerpot changeStamp
+                flowerpot->changeStamp = requestedResourceChangeStamp;
+
+                //add sender request to potsRequests
+                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                potsRequests.push_back(senderRequest);
+
+                //send ACK
+                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+            }
+            //if request is from the present
+            else if(flowerpot->changeStamp == requestedResourceChangeStamp)
+            {
+                //thieve is not requesting
+                if (processStatus == NOTREQUESTING)
+                {
+                    //add sender request to potsRequests
+                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                    potsRequests.push_back(senderRequest);
+
+                    //send ACK
+                    send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                }
+                //thieve is requesting
+                else if (processStatus == REQUESTING)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        Request request = potsRequests[i];
+
+                        //if it is our thieve request
+                        if (request.pid == myPID)
+                        {
+                            //if same flowerpot requested
+                            if (request.rid == resourceID)
                             {
-                                //send MY_TURN
-                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
-                            }
-                            //if our thieve clock is equal
-                            else if (lamport_clock == senderClock)
-                            {
-                                //if our thieve id is smaller
-                                if (myPID <= senderID)
+                                //if our thieve clock is lower (higher priority)
+                                if (lamport_clock < senderClock)
                                 {
+                                    isRespondFound = true;
+
                                     //send MY_TURN
                                     send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
                                 }
-                                //if our thieve id is higher
-                                else if (senderID < myPID)
+                                //if our thieve clock is equal
+                                else if (lamport_clock == senderClock)
+                                {
+                                    //if our thieve id is smaller
+                                    if (myPID <= senderID)
+                                    {
+                                        isRespondFound = true;
+
+                                        //send MY_TURN
+                                        send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                                    }
+                                    //if our thieve id is higher
+                                    else if (senderID < myPID)
+                                    {
+                                        //add sender request to potsRequests
+                                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                        potsRequests.push_back(senderRequest);
+
+                                        isRespondFound = true;
+
+                                        //send ACK
+                                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                                    }
+                                }
+                                //if our thieve clock is higher (lower priority)
+                                else if (senderClock < lamport_clock)
                                 {
                                     //add sender request to potsRequests
-                                    Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
+                                    Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                     potsRequests.push_back(senderRequest);
+
+                                    isRespondFound = true;
 
                                     //send ACK
                                     send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                                 }
                             }
-                            //if our thieve clock is higher (lower priority)
-                            else if (senderClock < lamport_clock)
+                            //ur thieve is requesting something else
+                            else
                             {
                                 //add sender request to potsRequests
-                                Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
                                 potsRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
 
                                 //send ACK
                                 send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                             }
-                        }
-                        //ur thieve is requesting something else
-                        else
-                        {
-                            //add sender request to potsRequests
-                            Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
-                            potsRequests.push_back(senderRequest);
 
-                            //send ACK
-                            send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            //we found our process request
+                            break;
                         }
+                    }
+
+                    if (!isRespondFound)
+                    {
+                        //add sender request to potsRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        potsRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                    }
+                }
+                //thieve is breaking something
+                else if (processStatus == INCRITICALSECTION)
+                {
+                    //true if we already found respond
+                    bool isRespondFound = false;
+
+                    //for each request in potsRequests
+                    for (int i = 0; i < potsRequests.size(); i++)
+                    {
+                        Request request = potsRequests[i];
+
+                        //if it is our thieve request
+                        if (request.pid == myPID)
+                        {
+                            //if same flowerpot requested
+                            if (request.rid == resourceID)
+                            {
+                                isRespondFound = true;
+
+                                //send MY_TURN
+                                send(lamport_clock, 0, 0, TAG_MY_TURN, senderID, myPID);
+                            }
+                            //ur thieve is fixing something else
+                            else
+                            {
+                                //add sender request to potsRequests
+                                Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                                potsRequests.push_back(senderRequest);
+
+                                isRespondFound = true;
+
+                                //send ACK
+                                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                            }
+
+                            //we found our process request
+                            break;
+                        }
+                    }
+                
+                    if (!isRespondFound)
+                    {
+                        //add sender request to potsRequests
+                        Request senderRequest(senderClock, senderID, resourceID, requestedResourceChangeStamp);
+                        potsRequests.push_back(senderRequest);
+
+                        isRespondFound = true;
+
+                        //send ACK
+                        send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
                     }
                 }
             }
-            //thieve is not requesting
-            else if (processStatus == NOTREQUESTING)
+            //if request is from the past
+            else if(requestedResourceChangeStamp < flowerpot->changeStamp)
             {
-                //requested pot id
-                int potID = senderMessage;
-
-                //add sender request to potsRequests
-                Request senderRequest(senderClock, senderID, potID, senderChangeStamp);
-                potsRequests.push_back(senderRequest);
-
-                //send ACK
-                send(lamport_clock, 0, 0, TAG_ACK, senderID, myPID);
+                
             }
 
             break;
@@ -717,17 +1233,17 @@ void *thieveReciever(void *thread)
             }
 
             //find toilet by id
-            int toiletID = senderMessage;
+            int toiletID = resourceID;
             Toilet *toilet = toilStatus[toiletID];
 
             //if toilet changeStamp is correct
-            if (toilet->changeStamp < senderChangeStamp)
+            if (toilet->changeStamp < requestedResourceChangeStamp)
             {
                 //update toilets status
                 toilet->status = BROKEN;
 
                 //increment toilet changeStamp
-                toilet->changeStamp = senderChangeStamp;
+                toilet->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu toilRequests
                 for (int i = 0; i < toilRequests.size(); i++)
@@ -753,7 +1269,7 @@ void *thieveReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, toilet->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, toilet->changeStamp + 1);
             }
 
             break;
@@ -767,17 +1283,17 @@ void *thieveReciever(void *thread)
             }
 
             //find toilet by id
-            int toilID = senderMessage;
-            Toilet *toilet = toilStatus[toilID];
+            int resourceID = resourceID;
+            Toilet *toilet = toilStatus[resourceID];
 
             //if toilet changeStamp is correct
-            if (toilet->changeStamp < senderChangeStamp)
+            if (toilet->changeStamp < requestedResourceChangeStamp)
             {
                 //update toilet status
-                toilet->status = REPAIRED;
+                toilet->status = FIXED;
 
                 //increment item changeStamp
-                toilet->changeStamp = senderChangeStamp;
+                toilet->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu toilRequests
                 for (int i = 0; i < toilRequests.size(); i++)
@@ -786,7 +1302,7 @@ void *thieveReciever(void *thread)
                     Request request = toilRequests[i];
 
                     //if it is same toilet
-                    if (request.rid == toilID)
+                    if (request.rid == resourceID)
                     {
                         //if it is our process request
                         if (request.pid == myPID)
@@ -803,7 +1319,7 @@ void *thieveReciever(void *thread)
             else if (debugMode)
                 {
                     printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                           myPID, senderChangeStamp, toilet->changeStamp + 1);
+                           myPID, requestedResourceChangeStamp, toilet->changeStamp + 1);
                 }
             
             break;
@@ -817,17 +1333,17 @@ void *thieveReciever(void *thread)
             }
 
             //find pot by id
-            int potID = senderMessage;
+            int potID = resourceID;
             Flowerpot *pot = potStatus[potID];
 
             //if pot changeStamp is correct
-            if (pot->changeStamp < senderChangeStamp)
+            if (pot->changeStamp < requestedResourceChangeStamp)
             {
                 //update pots status
-                pot->status = REPAIRED;
+                pot->status = FIXED;
 
                 //increment pot changeStamp
-                pot->changeStamp = senderChangeStamp;
+                pot->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu potsRequests
                 for (int i = 0; i < potsRequests.size(); i++)
@@ -853,7 +1369,7 @@ void *thieveReciever(void *thread)
             else if (debugMode)
                 {
                     printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                           myPID, senderChangeStamp, pot->changeStamp + 1);
+                           myPID, requestedResourceChangeStamp, pot->changeStamp + 1);
                 }
         
             break;
@@ -867,17 +1383,17 @@ void *thieveReciever(void *thread)
             }
 
             //find pot by id
-            int potID = senderMessage;
+            int potID = resourceID;
             Flowerpot *pot = potStatus[potID];
 
             //if pot changeStamp is correct
-            if (pot->changeStamp < senderChangeStamp)
+            if (pot->changeStamp < requestedResourceChangeStamp)
             {
                 //update pots status
-                pot->status = REPAIRED;
+                pot->status = FIXED;
 
                 //increment pot changeStamp
-                pot->changeStamp = senderChangeStamp;
+                pot->changeStamp = requestedResourceChangeStamp;
 
                 //iterate throu potsRequests
                 for (int i = 0; i < potsRequests.size(); i++)
@@ -903,7 +1419,7 @@ void *thieveReciever(void *thread)
             else if (debugMode)
             {
                 printf("[Benefactor %d] Got message with wrong changeStamp. Got %d expected %d \n",
-                        myPID, senderChangeStamp, pot->changeStamp + 1);
+                        myPID, requestedResourceChangeStamp, pot->changeStamp + 1);
             }
 
             break;
@@ -919,6 +1435,37 @@ void *thieveReciever(void *thread)
             //stop waiting for ack and stop requesting
             stillWaiting = false;
             processStatus = NOTREQUESTING;
+
+            //delete our process request
+            bool requestFound = false;
+            //for each request in potsRequests
+            for (int i = 0; i < potsRequests.size(); i++)
+            {
+                Request request = potsRequests[i];
+
+                //if it is our thieve request
+                if (request.pid == myPID)
+                {
+                    potsRequests.erase(potsRequests.begin() + i);   
+                    requestFound = true;
+                    break;
+                }
+            }
+            if (!requestFound)
+            {
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if it is our thieve request
+                    if (request.pid == myPID)
+                    {
+                        toilRequests.erase(toilRequests.begin() + i);   
+                        break;
+                    }
+                }
+            }
 
             break;
         }
@@ -1015,12 +1562,12 @@ void checkThread(int *argc, char **argv[])
 ////////////////////////////////////////////
 
 //choose to change flowerpot or toilet
-//toRepair == 0 -> find item to break
-//toRepair == 1 -> find item to fix
+//breakOrFix == 0 -> find item to break
+//breakOrFix == 1 -> find item to fix
 //return pair (all available items, choice)
 //choice == 0 -> flowerpot
 //choice == 1 -> toilet
-std::pair<int, bool> flowerpotOrToilet(bool toRepair)
+std::pair<int, bool> flowerpotOrToilet(bool breakOrFix)
 {
     //create flowerpots counter
     int potsToChangeCount = 0;
@@ -1029,15 +1576,15 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
     for (auto flowerpot : potStatus)
     {
         //find items to break
-        if (toRepair == false)
+        if (breakOrFix == BREAK)
         {
-            if (flowerpot->status == REPAIRED)
+            if (flowerpot->status == FIXED)
             {
                 potsToChangeCount++;
             }
         }
         //find items to fix
-        if (toRepair == true)
+        if (breakOrFix == FIX)
         {
             if (flowerpot->status == BROKEN)
             {
@@ -1053,15 +1600,15 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
     for (auto toilet : toilStatus)
     {
         //find items to break
-        if (toRepair == false)
+        if (breakOrFix == BREAK)
         {
-            if (toilet->status == REPAIRED)
+            if (toilet->status == FIXED)
             {
                 toilsToChangeCount++;
             }
         }
         //find items to fix
-        if (toRepair == true)
+        if (breakOrFix == FIX)
         {
             if (toilet->status == BROKEN)
             {
@@ -1093,16 +1640,16 @@ std::pair<int, bool> flowerpotOrToilet(bool toRepair)
 }
 
 //choose an item to change
-//toRepair == 0 -> find item to break
-//toRepair == 1 -> find item to fix
+//breakOrFix == 0 -> find item to break
+//breakOrFix == 1 -> find item to fix
 //return pair (choice, itemID)
 //choice == -1 -> nothing to change
 //choice == 0 -> flowerpot
 //choice == 1 -> toilet
-std::pair<int, int> findItemToChange(bool toRepair)
+std::pair<int, int> findItemToChange(bool breakOrFix)
 {
     //find what to change
-    std::pair<int, bool> choice = flowerpotOrToilet(toRepair);
+    std::pair<int, bool> choice = flowerpotOrToilet(breakOrFix);
 
     //sign that there is no broken toilets and flowerpots
     //so we have to wait some time for thieves to break something
@@ -1116,10 +1663,8 @@ std::pair<int, int> findItemToChange(bool toRepair)
         if (choice.second == FLOWERPOT)
         {
             //hold smallest flowerpot changeStamp
-            //set this to the first flowerpot changeStamp value
-            Flowerpot *firstFlowerpot = potStatus[0];
-            int smallestChangeStampValue = firstFlowerpot->changeStamp;
-            int smallestChangeStampID = 0;
+            int smallestChangeStampValue = -1;
+            int smallestChangeStampID = -1;
 
             //for each flowerpot in potStatus
             for (int flowerpotID = 0; flowerpotID < potStatus.size(); flowerpotID++)
@@ -1127,29 +1672,37 @@ std::pair<int, int> findItemToChange(bool toRepair)
                 //current flowerpot
                 Flowerpot *flowerpot = potStatus[flowerpotID];
 
-                //check if this flowerpot has no requests
-                bool noRequests = true;
-                //for each request in potsRequests
-                for (Request request : potsRequests)
+                if (flowerpot->status != breakOrFix)
                 {
-                    //if request to this flowerpot exists break
-                    if (request.rid == flowerpotID)
+                    //check if this flowerpot has no requests
+                    bool noRequests = true;
+                    //for each request in potsRequests
+                    for (Request request : potsRequests)
                     {
-                        noRequests = false;
-                        break;
+                        //if request to this flowerpot exists break
+                        if (request.rid == flowerpotID)
+                        {
+                            noRequests = false;
+                            break;
+                        }
                     }
-                }
 
-                //if flowerpot has no requests choose it as an item to fix
-                if (noRequests)
-                {
-                    return std::make_pair(choice.second, flowerpotID);
-                }
-                //else keep looking for the smallest flowerpot changeStamp
-                else if (flowerpot->changeStamp < smallestChangeStampValue)
-                {
-                    smallestChangeStampValue = flowerpot->changeStamp;
-                    smallestChangeStampID = flowerpotID;
+                    //if flowerpot has no requests choose it as an item to fix
+                    if (noRequests)
+                    {
+                        return std::make_pair(choice.second, flowerpotID);
+                    }
+                    //else keep looking for the smallest flowerpot changeStamp
+                    else if (smallestChangeStampValue == -1)
+                    {
+                        smallestChangeStampValue = flowerpot->changeStamp;
+                        smallestChangeStampID = flowerpotID;
+                    }
+                    else if (flowerpot->changeStamp < smallestChangeStampValue)
+                    {
+                        smallestChangeStampValue = flowerpot->changeStamp;
+                        smallestChangeStampID = flowerpotID;
+                    }
                 }
             } //for
 
@@ -1162,10 +1715,8 @@ std::pair<int, int> findItemToChange(bool toRepair)
         else if (choice.second == TOILET)
         {
             //hold smallest toilet changeStamp
-            //set this to the first toilet changeStamp value
-            Toilet *firstToilet = toilStatus[0];
-            int smallestChangeStampValue = firstToilet->changeStamp;
-            int smallestChangeStampID = 0;
+            int smallestChangeStampValue = -1;
+            int smallestChangeStampID = -1;
 
             //for each toilet in toilets
             for (int toiletID = 0; toiletID < toilStatus.size(); toiletID++)
@@ -1173,29 +1724,38 @@ std::pair<int, int> findItemToChange(bool toRepair)
                 //current toilet
                 Toilet *toilet = toilStatus[toiletID];
 
-                //check if this toilet has no requests
-                bool noRequests = true;
-                //for each request in toiletRequests
-                for (Request request : toilRequests)
+                //if toilet status is what we are looking for
+                if (toilet->status != breakOrFix)
                 {
-                    //if request to this toilet exists break
-                    if (request.rid == toiletID)
+                    //check if this toilet has no requests
+                    bool noRequests = true;
+                    //for each request in toiletRequests
+                    for (Request request : toilRequests)
                     {
-                        noRequests = false;
-                        break;
+                        //if request to this toilet exists break
+                        if (request.rid == toiletID)
+                        {
+                            noRequests = false;
+                            break;
+                        }
                     }
-                }
 
-                //if toilet has no requests choose it as an item to fix
-                if (noRequests)
-                {
-                    return std::make_pair(choice.second, toiletID);
-                }
-                //else keep looking for the smallest toilet changeStamp
-                else if (toilet->changeStamp < smallestChangeStampValue)
-                {
-                    smallestChangeStampValue = toilet->changeStamp;
-                    smallestChangeStampID = toiletID;
+                    //if toilet has no requests choose it as an item to fix
+                    if (noRequests)
+                    {
+                        return std::make_pair(choice.second, toiletID);
+                    }
+                    //else keep looking for the smallest toilet changeStamp
+                    else if (smallestChangeStampValue == -1)
+                    {
+                        smallestChangeStampValue = toilet->changeStamp;
+                        smallestChangeStampID = toiletID;
+                    }
+                    else if (toilet->changeStamp < smallestChangeStampValue)
+                    {
+                        smallestChangeStampValue = toilet->changeStamp;
+                        smallestChangeStampID = toiletID;
+                    }
                 }
             } //for
 
@@ -1368,10 +1928,24 @@ void fixItem(std::pair<int, int> item)
         Flowerpot *flowerpot = potStatus[flowerpotID];
 
         //update item status
-        flowerpot->status = REPAIRED;
+        flowerpot->status = FIXED;
 
         //increment item changeStamp
         flowerpot->changeStamp++;
+
+        //iterate throu potsRequests
+        for (int i = 0; i < potsRequests.size(); i++)
+        {
+            //take next request
+            Request request = potsRequests[i];
+
+            //if it is same flowerpot
+            if (request.rid == flowerpotID)
+            {
+                //remove request from potsRequests
+                potsRequests.erase(potsRequests.begin() + i);
+            }
+        }
 
         //send fixed broadcast to others
         broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_REPAIRED, totalProcesses, myPID);
@@ -1387,10 +1961,24 @@ void fixItem(std::pair<int, int> item)
         Toilet *toilet = toilStatus[toiletID];
 
         //update item status
-        toilet->status = REPAIRED;
+        toilet->status = FIXED;
 
         //increment item changeStamp
         toilet->changeStamp++;
+
+        //iterate throu toilRequests
+        for (int i = 0; i < toilRequests.size(); i++)
+        {
+            //take next request
+            Request request = toilRequests[i];
+
+            //if it is same toilet
+            if (request.rid == toiletID)
+            {
+                //remove request from toilRequests
+                toilRequests.erase(toilRequests.begin() + i);
+            }
+        }
 
         //send fixed broadcast to others
         broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_REPAIRED, totalProcesses, myPID);
@@ -1433,6 +2021,8 @@ void runBenefactorLoop()
             //set ack count to 0
             gottenACK = 0;
 
+            printf("[Benefactor %d] Starting new loop \n", myPID);
+
             continue;
         }
 
@@ -1452,6 +2042,9 @@ void runBenefactorLoop()
         //enter critical section
         if (canIEnter)
         {
+            //process in critical section
+            processStatus = INCRITICALSECTION;
+
             if (choice.first == FLOWERPOT)
             {
                 printf("[Benefactor %d] Fixing flowerpot with id %d \n", myPID, choice.second);
@@ -1468,7 +2061,7 @@ void runBenefactorLoop()
         }
         else
         {
-            //process in not requesting resource now
+            //process is not requesting resource now
             processStatus = NOTREQUESTING;
 
             //we couldnt break, no clock incrementation, just sleep for some time to decide what do I do next.
@@ -1501,6 +2094,20 @@ void breakItem(std::pair<int, int> item)
         //increment item changeStamp
         flowerpot->changeStamp++;
 
+        //iterate throu potsRequests
+        for (int i = 0; i < potsRequests.size(); i++)
+        {
+            //take next request
+            Request request = potsRequests[i];
+
+            //if it is same flowerpot
+            if (request.rid == flowerpotID)
+            {
+                //remove request from potsRequests
+                potsRequests.erase(potsRequests.begin() + i);
+            }
+        }
+
         //send broken broadcast to others
         broadcast(lamport_clock, flowerpotID, flowerpot->changeStamp, TAG_POT_BROKEN, totalProcesses, myPID);
     }
@@ -1520,6 +2127,20 @@ void breakItem(std::pair<int, int> item)
         //increment item changeStamp
         toilet->changeStamp++;
 
+        //iterate throu toilRequests
+        for (int i = 0; i < toilRequests.size(); i++)
+        {
+            //take next request
+            Request request = toilRequests[i];
+
+            //if it is same toilet
+            if (request.rid == toiletID)
+            {
+                //remove request from toilRequests
+                toilRequests.erase(toilRequests.begin() + i);
+            }
+        }
+
         //send broken broadcast to others
         broadcast(lamport_clock, toiletID, toilet->changeStamp, TAG_TOILET_BROKEN, totalProcesses, myPID);
     }
@@ -1531,6 +2152,7 @@ void runThieveLoop()
     {
         //pair made of 1st int = what is it, 2nd int = id.
         std::pair<int, int> choice = findItemToChange(false);
+        
         if (debugMode)
         {
             if (choice.first == FLOWERPOT)
@@ -1559,6 +2181,8 @@ void runThieveLoop()
             //set ack count to 0
             gottenACK = 0;
 
+            printf("[Thieve %d] Starting new loop \n", myPID);
+
             continue;
         }
 
@@ -1576,6 +2200,9 @@ void runThieveLoop()
 
         if (canIEnter)
         {
+            //process in critical section
+            processStatus = INCRITICALSECTION;
+
             if (choice.first == FLOWERPOT)
             {
                 printf("[Thieve %d] Breaking flowerpot with id %d \n", myPID, choice.second);
