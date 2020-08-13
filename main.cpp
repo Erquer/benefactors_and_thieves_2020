@@ -55,8 +55,6 @@ int processStatus = NOTREQUESTING;
  */
 //ACK counter
 int gottenACK = 0;
-//set this to false when we won't get access to resource
-bool stillWaiting = true;
 
 //Requests to flowerpots
 std::vector<Request> potsRequests;
@@ -126,6 +124,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //delete request
@@ -336,6 +337,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, FLOWERPOT, flowerpot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //delete request
@@ -554,6 +558,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from toilRequests
@@ -604,6 +611,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from toilRequests
@@ -654,6 +664,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, FLOWERPOT, pot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from potsRequests
@@ -704,6 +717,9 @@ void *benefactorReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, FLOWERPOT, pot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from potsRequests
@@ -729,7 +745,6 @@ void *benefactorReciever(void *thread)
             }
 
             //stop waiting for ack and stop requesting
-            stillWaiting = false;
             processStatus = NOTREQUESTING;
 
             //delete our process request
@@ -742,6 +757,9 @@ void *benefactorReciever(void *thread)
                 //if it is our benefactor request
                 if (request.pid == myPID)
                 {
+                    //send abort broadcast to other benefactors
+                    benefactorsBroadcast(lamport_clock, FLOWERPOT, 0, TAG_ABORT, totalProcesses, myPID);
+
                     potsRequests.erase(potsRequests.begin() + i);   
                     requestFound = true;
                     break;
@@ -757,7 +775,11 @@ void *benefactorReciever(void *thread)
                     //if it is our benefactor request
                     if (request.pid == myPID)
                     {
-                        toilRequests.erase(toilRequests.begin() + i);   
+                        //send abort broadcast to other benefactors
+                        benefactorsBroadcast(lamport_clock, TOILET, 0, TAG_ABORT, totalProcesses, myPID);
+
+                        toilRequests.erase(toilRequests.begin() + i);      
+                        requestFound = true;
                         break;
                     }
                 }
@@ -775,6 +797,56 @@ void *benefactorReciever(void *thread)
 
             //increase ack count by 1
             gottenACK++;
+
+            break;
+        }
+
+        case TAG_ABORT:
+        {
+            if (debugMode)
+            {
+                printf("[Benefactor %d] got abort from process%d \n", myPID, senderID);
+            }
+
+            //potOrToilet == 0 -> flowerpot
+            //potOrToilet == 1 -> toilet
+            bool potOrToilet = resourceID;
+            if (potOrToilet == FLOWERPOT)
+            {
+                //delete sender request
+                //for each request in potsRequests
+                for (int i = 0; i < potsRequests.size(); i++)
+                {
+                    Request request = potsRequests[i];
+
+                    //if it is sender request
+                    if (request.pid == senderID)
+                    {
+                        //delete request
+                        potsRequests.erase(potsRequests.begin() + i);
+
+                        break;
+                    }
+                }
+            }
+            else if (potOrToilet == TOILET)
+            {
+                //delete sender request
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if it is sender request
+                    if (request.pid == senderID)
+                    {
+                        //delete request
+                        toilRequests.erase(toilRequests.begin() + i);
+
+                        break;
+                    }
+                }
+            }
 
             break;
         }
@@ -831,6 +903,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //delete request
@@ -1041,6 +1116,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+                            
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, FLOWERPOT, flowerpot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //delete request
@@ -1258,6 +1336,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from toilRequests
@@ -1308,6 +1389,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, TOILET, toilet->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from toilRequests
@@ -1358,6 +1442,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other thieves
+                            thievesBroadcast(lamport_clock, FLOWERPOT, pot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from potsRequests
@@ -1408,6 +1495,9 @@ void *thieveReciever(void *thread)
                         if (request.pid == myPID)
                         {
                             processStatus = NOTREQUESTING;
+
+                            //send abort broadcast to other benefactors
+                            benefactorsBroadcast(lamport_clock, FLOWERPOT, pot->changeStamp, TAG_ABORT, totalProcesses, myPID);
                         }
 
                         //remove request from potsRequests
@@ -1433,7 +1523,6 @@ void *thieveReciever(void *thread)
             }
 
             //stop waiting for ack and stop requesting
-            stillWaiting = false;
             processStatus = NOTREQUESTING;
 
             //delete our process request
@@ -1446,6 +1535,9 @@ void *thieveReciever(void *thread)
                 //if it is our thieve request
                 if (request.pid == myPID)
                 {
+                    //send abort broadcast to other thieves
+                    thievesBroadcast(lamport_clock, FLOWERPOT, 0, TAG_ABORT, totalProcesses, myPID);
+
                     potsRequests.erase(potsRequests.begin() + i);   
                     requestFound = true;
                     break;
@@ -1461,7 +1553,11 @@ void *thieveReciever(void *thread)
                     //if it is our thieve request
                     if (request.pid == myPID)
                     {
+                        //send abort broadcast to other thieves
+                        benefactorsBroadcast(lamport_clock, TOILET, 0, TAG_ABORT, totalProcesses, myPID);
+
                         toilRequests.erase(toilRequests.begin() + i);   
+                        requestFound = true;
                         break;
                     }
                 }
@@ -1480,6 +1576,56 @@ void *thieveReciever(void *thread)
 
             //increase ack count by 1
             gottenACK++;
+
+            break;
+        }
+
+        case TAG_ABORT:
+        {
+            if (debugMode)
+            {
+                printf("[Thieve %d] got abort from process%d \n", myPID, senderID);
+            }
+
+            //potOrToilet == 0 -> flowerpot
+            //potOrToilet == 1 -> toilet
+            bool potOrToilet = resourceID;
+            if (potOrToilet == FLOWERPOT)
+            {
+                //delete sender request
+                //for each request in potsRequests
+                for (int i = 0; i < potsRequests.size(); i++)
+                {
+                    Request request = potsRequests[i];
+
+                    //if it is sender request
+                    if (request.pid == senderID)
+                    {
+                        //delete request
+                        potsRequests.erase(potsRequests.begin() + i);
+
+                        break;
+                    }
+                }
+            }
+            else if (potOrToilet == TOILET)
+            {
+                //delete sender request
+                //for each request in toilRequests
+                for (int i = 0; i < toilRequests.size(); i++)
+                {
+                    Request request = toilRequests[i];
+
+                    //if it is sender request
+                    if (request.pid == senderID)
+                    {
+                        //delete request
+                        toilRequests.erase(toilRequests.begin() + i);
+
+                        break;
+                    }
+                }
+            }
 
             break;
         }
@@ -1877,7 +2023,7 @@ void sendRequest(std::pair<int, int> item, int tag)
 //wait untill you wont get all ACK needed
 //(? check this in recieverLoop and increment variable ?) -
 //return bool if we can or dont.
-bool waitForACK(int &gottenACK, bool &stillWaiting)
+bool waitForACK(int &gottenACK, int &processStatus)
 {
     if (debugMode)
     {
@@ -1889,7 +2035,6 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
     {
         //wait for access
         while (gottenACK < thievesCount - 1 && 
-            stillWaiting && 
             processStatus == REQUESTING)
         {
             continue;
@@ -1900,7 +2045,6 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
     {
         //wait for access
         while (gottenACK < benefactorsCount - 1 && 
-            stillWaiting && 
             processStatus == REQUESTING)
         {
             continue;
@@ -1909,7 +2053,19 @@ bool waitForACK(int &gottenACK, bool &stillWaiting)
 
     //0 -> no access
     //1 -> access
-    return stillWaiting;
+    if (processStatus == NOTREQUESTING)
+    {
+        return 0;
+    }
+    else if (processStatus == REQUESTING)
+    {
+        return 1;
+    }
+    else if (processStatus == INCRITICALSECTION)
+    {
+        return 0;
+    }
+    
 }
 
 void fixItem(std::pair<int, int> item)
@@ -2032,8 +2188,7 @@ void runBenefactorLoop()
         sendRequest(choice, (choice.first == TOILET) ? TAG_TOILET_TO_REPAIR : TAG_POT_TO_REPAIR);
 
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
-        stillWaiting = true;
-        bool canIEnter = waitForACK(gottenACK, stillWaiting);
+        bool canIEnter = waitForACK(gottenACK, processStatus);
 
         //set ack count to 0
         gottenACK = 0;
@@ -2192,8 +2347,7 @@ void runThieveLoop()
         sendRequest(choice, (choice.first == TOILET) ? TAG_TOILET_TO_BREAK : TAG_POT_TO_BREAK);
 
         //wait untill you wont get all ACK needed (? check this in recieverLoop and increment variable ?) - return bool if we can or dont.
-        stillWaiting = true;
-        bool canIEnter = waitForACK(gottenACK, stillWaiting);
+        bool canIEnter = waitForACK(gottenACK, processStatus);
 
         //set ack count to 0
         gottenACK = 0;

@@ -51,3 +51,8 @@
 //Tag using to inform process to stop requesting this resource
 #define TAG_ACK 200
 #endif
+
+#ifndef TAG_ABORT
+//Tag using to inform process to stop requesting this resource
+#define TAG_ABORT 210
+#endif
