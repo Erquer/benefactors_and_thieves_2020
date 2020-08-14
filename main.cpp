@@ -1763,6 +1763,19 @@ std::pair<int, bool> flowerpotOrToilet(bool breakOrFix)
         }
     }
 
+    //if there are no pots to change, but there are toilets to change
+    if (potsToChangeCount == 0 && toilsToChangeCount != 0)
+    {
+        bool choice = TOILET;
+        return std::make_pair(toilsToChangeCount, choice);
+    }
+    //if there are no toilets to change, but there are pots to change
+    else if (toilsToChangeCount == 0 && potsToChangeCount != 0)
+    {
+        bool choice = FLOWERPOT;
+        return std::make_pair(potsToChangeCount, choice);
+    }
+
     //requests counts
     int flowerpotRequestsCount = potsRequests.size();
     int toiletRequestsCount = toilRequests.size();
@@ -2177,7 +2190,7 @@ void runBenefactorLoop()
             //set ack count to 0
             gottenACK = 0;
 
-            printf("[Benefactor %d] Starting new loop \n", myPID);
+            printf("[Benefactor %d] Nothing to fix. Starting new loop \n", myPID);
 
             continue;
         }
@@ -2336,7 +2349,7 @@ void runThieveLoop()
             //set ack count to 0
             gottenACK = 0;
 
-            printf("[Thieve %d] Starting new loop \n", myPID);
+            printf("[Thieve %d] Nothing to break. Starting new loop \n", myPID);
 
             continue;
         }
